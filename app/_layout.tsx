@@ -6,6 +6,23 @@ import * as SecureStore from 'expo-secure-store';
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    },
+  },
+});
+
+const asyncStoragePersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+});
+
 // 1. Configuración de cómo se comportan las notificaciones cuando la app está abierta
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -20,12 +37,12 @@ Notifications.setNotificationHandler({
 
 export default function RootLayout() {
   const [expoPushToken, setExpoPushToken] = useState<string | undefined>('');
-  const notificationListener = useRef<EventSubscription|null>(null);
-  const responseListener = useRef<EventSubscription|null>(null);
+  const notificationListener = useRef<EventSubscription | null>(null);
+  const responseListener = useRef<EventSubscription | null>(null);
 
   useEffect(() => {
 
-    async function fetchAndStoreToken(token:string) {
+    async function fetchAndStoreToken(token: string) {
       await SecureStore.setItemAsync('expoPushToken', token);
     }
     // 2. Registrar para obtener el Token de Expo
@@ -58,12 +75,17 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <Stack>
-      <Stack.Screen
-        name="(tabs)"
-        options={{ headerShown: false }}
-      />
-    </Stack>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister: asyncStoragePersister }}
+    >
+      <Stack>
+        <Stack.Screen
+          name="(tabs)"
+          options={{ headerShown: false }}
+        />
+      </Stack>
+    </PersistQueryClientProvider>
   );
 }
 
@@ -82,12 +104,12 @@ async function registerForPushNotificationsAsync(): Promise<string | undefined> 
   if (Device.isDevice) {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
-    
+
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    
+
     if (finalStatus !== 'granted') {
       alert('¡Permiso de notificaciones denegado!');
       return undefined;
@@ -105,7 +127,7 @@ async function registerForPushNotificationsAsync(): Promise<string | undefined> 
     } catch (e) {
       console.error("Error obteniendo el token de Expo:", e);
     }
-    
+
   } else {
     alert('Las notificaciones Push requieren un dispositivo físico (no funciona en emulador)');
   }
