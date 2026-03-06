@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFonts } from 'expo-font'; // Importante para las fuentes
+import { useFonts } from 'expo-font';
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { deleteUser } from 'firebase/auth';
@@ -7,22 +7,22 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
+  Platform,
+  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View
 } from "react-native";
 import { QrCodeSvg } from 'react-native-qr-svg';
 import { auth } from '../../../src/firebaseConfig';
 
-const { width } = Dimensions.get('window');
-
 // --- PALETA QRONNOS ---
 const COLORS = {
-  background: '#0f1115', // Ajustado al Dashboard
-  cardBg: '#181b21',     // Ajustado al Dashboard
+  background: '#0f1115',
+  cardBg: '#181b21',
   accent: '#01c38e',
   text: '#ffffff',
   textSec: '#8b9bb4',
@@ -39,6 +39,9 @@ const FONTS = {
 
 export default function ProfileScreen() {
   const navigator: any = useNavigation();
+  // Hook dinámico para responsividad (reacciona a rotaciones y tamaños de iPad)
+  const { width } = useWindowDimensions(); 
+  
   const [nombreClienteState, setNameClienteState] = useState('');
   const [qrData, setQrData] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -125,7 +128,6 @@ export default function ProfileScreen() {
                 return;
               }
 
-              // 1. Borrar de la base de datos personal
               const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/cliente/${userId}`, {
                 method: 'DELETE',
                 headers: {
@@ -137,23 +139,19 @@ export default function ProfileScreen() {
               if (!response.ok) {
                 const errorData = await response.json();
                 console.error("Error al borrar del backend:", errorData);
-                // Opcional: Decidir si continuar o no. Normalmente si falla el backend, no deberíamos borrar Firebase aún? 
-                // Pero el usuario pidió borrar de ambos.
               }
 
-              // 2. Borrar de Firebase
               const user = auth.currentUser;
               if (user) {
                 await deleteUser(user);
               }
 
-              // 3. Limpiar SecureStore y navegar
               await SecureStore.deleteItemAsync('user_id');
               await SecureStore.deleteItemAsync('jwt');
               await SecureStore.deleteItemAsync('nameCliente');
 
               Alert.alert("Cuenta eliminada", "Tu cuenta ha sido eliminada exitosamente.");
-              router.replace('/'); // O la ruta de login que corresponda
+              router.replace('/'); 
 
             } catch (error: any) {
               console.error("Error eliminando cuenta:", error);
@@ -193,8 +191,16 @@ export default function ProfileScreen() {
     );
   }
 
+  // Cálculos dinámicos para responsividad
+  const isTablet = width >= 768;
+  const qrFrameSize = Math.min(width * 0.45, 200); // El QR crecerá máximo hasta 200px
+  const cardResponsiveStyle = {
+    width: width * 0.9, 
+    maxWidth: 420 // Evita que en iPads la tarjeta sea obscenamente ancha
+  };
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
       {/* HEADER PROFESIONAL */}
@@ -205,14 +211,15 @@ export default function ProfileScreen() {
 
       <View style={styles.content}>
         {/* TARJETA DE PERFIL TIPO MEMBRESÍA */}
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, cardResponsiveStyle]}>
           <View style={styles.cardHeader}>
             <Text style={styles.brandName}>QRONNOS</Text>
-
           </View>
 
           <View style={styles.userInfoSection}>
-            <Text style={styles.userName}>{nombreClienteState.toUpperCase() || 'USUARIO'}</Text>
+            <Text style={[styles.userName, { fontSize: isTablet ? 28 : 22 }]}>
+              {nombreClienteState.toUpperCase() || 'USUARIO'}
+            </Text>
             <View style={styles.badgeContainer}>
               <Text style={styles.userLabel}>CLIENTE EXCLUSIVO</Text>
             </View>
@@ -222,7 +229,7 @@ export default function ProfileScreen() {
           <View style={styles.qrWrapper}>
             <QrCodeSvg
               value={qrData}
-              frameSize={180}
+              frameSize={qrFrameSize}
               contentCells={5}
               backgroundColor="white"
               color="#000"
@@ -234,30 +241,24 @@ export default function ProfileScreen() {
             <Text style={styles.footerNoteCard}>Identificación Digital</Text>
           </View>
         </View>
+
         <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
           <Text style={styles.deleteAccountButtonText}>Borrar Cuenta</Text>
         </TouchableOpacity>
-        <Text style={styles.footerNote}>Presenta este código en los comercios aliados para recibir tus beneficios.</Text>
+        
+        <Text style={styles.footerNote}>
+          Presenta este código en los comercios aliados para recibir tus beneficios.
+        </Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  deleteAccountButton: {
-    marginTop: 20,
-    padding: 12,
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-  },
-  deleteAccountButtonText: {
-    color: COLORS.text,
-    fontFamily: FONTS.title,
-    fontSize: 12,
-  },
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   centerContainer: {
     flex: 1,
@@ -269,31 +270,26 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 60,
+    justifyContent: 'center', // Centrado mejorado
+    paddingVertical: 15,
     paddingHorizontal: 20,
-    paddingBottom: 20,
     backgroundColor: COLORS.background,
   },
   headerTitle: {
     fontSize: 18,
     fontFamily: FONTS.title,
     color: COLORS.text,
-    letterSpacing: 1
-  },
-  iconButton: {
-    padding: 8,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 12,
+    letterSpacing: 1,
+    textAlign: 'center'
   },
   content: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: 10,
+    paddingHorizontal: 15,
   },
   // --- CARD DESIGN ---
   profileCard: {
-    width: width * 0.88,
     backgroundColor: COLORS.cardBg,
     borderRadius: 30,
     padding: 24,
@@ -305,34 +301,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 15,
     elevation: 8,
+    width: '100%', // Se sobrescribe por cardResponsiveStyle
   },
   cardHeader: {
     width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center', // Mejorado para centrar el logo
     alignItems: 'center',
-    marginBottom: 30
+    marginBottom: 25
   },
   brandName: {
     fontFamily: FONTS.title,
     color: COLORS.accent,
-    fontSize: 14,
+    fontSize: 16, // Ligeramente más grande
     letterSpacing: 2
-  },
-  chipDesign: {
-    width: 40,
-    height: 30,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)'
   },
   userInfoSection: {
     alignItems: 'center',
-    marginBottom: 30
+    marginBottom: 30,
+    width: '100%',
   },
   userName: {
-    fontSize: 22,
     fontFamily: FONTS.title,
     color: COLORS.text,
     textAlign: 'center',
@@ -360,11 +349,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
+    elevation: 5,
   },
   scanHintContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 35,
+    marginTop: 25,
   },
   footerNoteCard: {
     marginLeft: 8,
@@ -373,6 +363,24 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.textMedium,
     textTransform: 'uppercase',
     letterSpacing: 1
+  },
+  // --- ACCIONES ---
+  deleteAccountButton: {
+    marginTop: 30,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(255, 60, 60, 0.1)', // Diseño más sutil y estándar para eliminar
+    borderWidth: 1,
+    borderColor: 'rgba(255, 60, 60, 0.3)',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 300,
+    alignItems: 'center',
+  },
+  deleteAccountButtonText: {
+    color: '#ff4444',
+    fontFamily: FONTS.title,
+    fontSize: 12,
   },
   // --- OTROS ---
   loadingText: {
@@ -397,13 +405,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20
   },
   footerNote: {
-    marginTop: 40,
+    marginTop: 25,
     fontSize: 13,
     color: COLORS.textSec,
     fontFamily: FONTS.textRegular,
     textAlign: 'center',
-    paddingHorizontal: 50,
+    paddingHorizontal: 30,
     lineHeight: 20,
-    opacity: 0.6
+    opacity: 0.6,
+    maxWidth: 400
   }
 });

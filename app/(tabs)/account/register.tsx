@@ -11,7 +11,8 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    useWindowDimensions // <-- Agregamos este hook
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -40,6 +41,7 @@ const FONTS = {
 export default function Register() {
     const safeareaInsets = useSafeAreaInsets();
     const router = useRouter();
+    const { width } = useWindowDimensions(); // <-- Obtenemos el ancho dinámicamente
 
     const [nombreCompleto, setNombreCompleto] = useState("");
     const [correo, setCorreo] = useState("");
@@ -117,105 +119,120 @@ export default function Register() {
 
     if (!fontsLoaded) return null;
 
+    // Calculamos si es una pantalla grande para aplicar padding dinámico
+    const isTablet = width > 500;
+
     return (
         <View style={styles.fullScreenContainer}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
             
-            <View style={{ paddingTop: safeareaInsets.top + 20, paddingHorizontal: 25 }}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="chevron-back" size={24} color={COLORS.accent} />
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.containerLogin}>
-                <Text style={styles.welcomeText}>NUEVA EXPERIENCIA</Text>
-                <Text style={styles.Titulo}>CREAR <Text style={{color: COLORS.accent}}>CUENTA</Text></Text>
-                <Text style={styles.Subtitulo}>Únete al ecosistema tecnológico QRONNOS</Text>
-                
-                {/* Nombre Completo */}
-                <View style={styles.inputWrapper}>
-                    <Text style={styles.label}>NOMBRE COMPLETO</Text>
-                    <View style={styles.inputShadowContainer}>
-                        <TextInput
-                            placeholder="Tu nombre y apellido"
-                            placeholderTextColor="rgba(255,255,255,0.2)"
-                            style={styles.TextInput}
-                            value={nombreCompleto}
-                            onChangeText={setNombreCompleto}
-                        />
-                    </View>
-                </View>
-                
-                {/* Correo */}
-                <View style={styles.inputWrapper}>
-                    <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
-                    <View style={styles.inputShadowContainer}>
-                        <TextInput
-                            placeholder="ejemplo@qronnos.com"
-                            placeholderTextColor="rgba(255,255,255,0.2)"
-                            style={styles.TextInput}
-                            value={correo}
-                            onChangeText={setCorreo}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                        />
-                    </View>
-                </View>
-                
-                {/* Contraseña con botón de visualización */}
-                <View style={styles.inputWrapper}>
-                    <Text style={styles.label}>CONTRASEÑA</Text>
-                    <View style={[styles.inputShadowContainer, { flexDirection: 'row', alignItems: 'center', paddingRight: 15 }]}>
-                        <TextInput
-                            placeholder="********"
-                            placeholderTextColor="rgba(255,255,255,0.2)"
-                            secureTextEntry={!showPassword}
-                            style={styles.TextInput}
-                            value={contrasena}
-                            onChangeText={setContrasena}
-                        />
-                        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                            <Ionicons 
-                                name={showPassword ? "eye-off" : "eye"} 
-                                size={22} 
-                                color={COLORS.textSec} 
-                            />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* BOTÓN TÉRMINOS Y CONDICIONES */}
-                <View style={styles.termsContainer}>
-                    <TouchableOpacity 
-                        style={[styles.checkbox, aceptoTerminos && styles.checkboxChecked]} 
-                        onPress={() => setAceptoTerminos(!aceptoTerminos)}
-                        activeOpacity={0.8}
-                    >
-                        {aceptoTerminos && <Ionicons name="checkmark" size={16} color="#000" />}
+            {/* --- CONTENEDOR RESPONSIVO CENTRAL --- */}
+            <View 
+                style={[
+                    styles.contentWrapper, 
+                    { 
+                        paddingTop: safeareaInsets.top + 20,
+                        paddingHorizontal: isTablet ? 0 : '8%'
+                    }
+                ]}
+            >
+                {/* Botón de volver alineado al contenedor central */}
+                <View style={styles.headerSpacer}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="chevron-back" size={24} color={COLORS.accent} />
                     </TouchableOpacity>
-                    
-                    <Text style={styles.termsText}>
-                        Acepto los{' '}
-                        <Text style={styles.linkText} onPress={handleOpenTerms}>
-                            Términos y Condiciones
-                        </Text>
-                    </Text>
                 </View>
 
-                <TouchableOpacity 
-                    onPress={handleRegister} 
-                    style={[
-                        styles.button, 
-                        (isRegistering || !aceptoTerminos) && { opacity: 0.5, elevation: 0, shadowOpacity: 0 }
-                    ]}
-                    disabled={isRegistering || !aceptoTerminos}
-                >
-                    {isRegistering ? (
-                        <ActivityIndicator color="#000" />
-                    ) : (
-                        <Text style={styles.textButton}>REGISTRARSE</Text>
-                    )}
-                </TouchableOpacity>
+                <View style={styles.containerLogin}>
+                    <Text style={styles.welcomeText}>NUEVA EXPERIENCIA</Text>
+                    <Text style={styles.Titulo}>CREAR <Text style={{color: COLORS.accent}}>CUENTA</Text></Text>
+                    <Text style={styles.Subtitulo}>Únete al ecosistema tecnológico QRONNOS</Text>
+                    
+                    {/* Nombre Completo */}
+                    <View style={styles.inputWrapper}>
+                        <Text style={styles.label}>NOMBRE COMPLETO</Text>
+                        <View style={styles.inputShadowContainer}>
+                            <TextInput
+                                placeholder="Tu nombre y apellido"
+                                placeholderTextColor="rgba(255,255,255,0.2)"
+                                style={styles.TextInput}
+                                value={nombreCompleto}
+                                onChangeText={setNombreCompleto}
+                            />
+                        </View>
+                    </View>
+                    
+                    {/* Correo */}
+                    <View style={styles.inputWrapper}>
+                        <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
+                        <View style={styles.inputShadowContainer}>
+                            <TextInput
+                                placeholder="ejemplo@qronnos.com"
+                                placeholderTextColor="rgba(255,255,255,0.2)"
+                                style={styles.TextInput}
+                                value={correo}
+                                onChangeText={setCorreo}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
+                            />
+                        </View>
+                    </View>
+                    
+                    {/* Contraseña con botón de visualización */}
+                    <View style={styles.inputWrapper}>
+                        <Text style={styles.label}>CONTRASEÑA</Text>
+                        <View style={[styles.inputShadowContainer, { flexDirection: 'row', alignItems: 'center', paddingRight: 15 }]}>
+                            <TextInput
+                                placeholder="********"
+                                placeholderTextColor="rgba(255,255,255,0.2)"
+                                secureTextEntry={!showPassword}
+                                style={styles.TextInput}
+                                value={contrasena}
+                                onChangeText={setContrasena}
+                            />
+                            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                                <Ionicons 
+                                    name={showPassword ? "eye-off" : "eye"} 
+                                    size={22} 
+                                    color={COLORS.textSec} 
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* BOTÓN TÉRMINOS Y CONDICIONES */}
+                    <View style={styles.termsContainer}>
+                        <TouchableOpacity 
+                            style={[styles.checkbox, aceptoTerminos && styles.checkboxChecked]} 
+                            onPress={() => setAceptoTerminos(!aceptoTerminos)}
+                            activeOpacity={0.8}
+                        >
+                            {aceptoTerminos && <Ionicons name="checkmark" size={16} color="#000" />}
+                        </TouchableOpacity>
+                        
+                        <Text style={styles.termsText}>
+                            Acepto los{' '}
+                            <Text style={styles.linkText} onPress={handleOpenTerms}>
+                                Términos y Condiciones
+                            </Text>
+                        </Text>
+                    </View>
+
+                    <TouchableOpacity 
+                        onPress={handleRegister} 
+                        style={[
+                            styles.button, 
+                            (isRegistering || !aceptoTerminos) && { opacity: 0.5, elevation: 0, shadowOpacity: 0 }
+                        ]}
+                        disabled={isRegistering || !aceptoTerminos}
+                    >
+                        {isRegistering ? (
+                            <ActivityIndicator color="#000" />
+                        ) : (
+                            <Text style={styles.textButton}>REGISTRARSE</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -226,6 +243,17 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
         flex: 1,
     },
+    // --- MAGIA RESPONSIVA ---
+    contentWrapper: {
+        width: '100%',
+        maxWidth: 450,
+        alignSelf: 'center',
+        flex: 1,
+    },
+    headerSpacer: {
+        marginBottom: 20,
+    },
+    // ------------------------
     backButton: {
         width: 45,
         height: 45,
@@ -237,8 +265,7 @@ const styles = StyleSheet.create({
         borderColor: COLORS.border,
     },
     containerLogin: {
-        marginTop: 20, 
-        paddingHorizontal: 35,
+        width: '100%',
     },
     welcomeText: {
         fontFamily: FONTS.textBold,

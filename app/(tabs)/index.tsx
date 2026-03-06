@@ -8,13 +8,13 @@ import {
     ActivityIndicator,
     Alert,
     Animated,
-    Dimensions,
     StatusBar,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    useWindowDimensions // <-- Usaremos este hook en lugar de Dimensions estático
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from '../../src/firebaseConfig';
@@ -39,13 +39,11 @@ const FONTS = {
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const LOGIN_CLIENTE_URL = `${API_URL}/api/cliente/login`;
-const { width, height } = Dimensions.get('window');
-
-
 
 export default function HomeScreen() {
     const safeareaInsets = useSafeAreaInsets();
     const router = useRouter();
+    const { width, height } = useWindowDimensions(); // <-- Obtiene dimensiones dinámicamente
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -54,8 +52,8 @@ export default function HomeScreen() {
     // --- ESTADOS DE ANIMACIÓN ---
     const [splashVisible, setSplashVisible] = useState(true);
     const splashOpacity = useRef(new Animated.Value(1)).current;
-    const logoScale = useRef(new Animated.Value(0.8)).current; // Empieza un poco pequeño
-    const loginOpacity = useRef(new Animated.Value(0)).current; // El login empieza invisible
+    const logoScale = useRef(new Animated.Value(0.8)).current; 
+    const loginOpacity = useRef(new Animated.Value(0)).current; 
 
     // CARGA DE FUENTES
     const [fontsLoaded] = useFonts({
@@ -69,7 +67,6 @@ export default function HomeScreen() {
     useEffect(() => {
         if (fontsLoaded) {
             Animated.sequence([
-                // 1. Entrada del logo (Fade In + Zoom suave)
                 Animated.parallel([
                     Animated.timing(splashOpacity, {
                         toValue: 1,
@@ -83,9 +80,7 @@ export default function HomeScreen() {
                         useNativeDriver: true,
                     })
                 ]),
-                // 2. Pausa para ver el logo
                 Animated.delay(1500),
-                // 3. Salida del Splash y entrada del Login
                 Animated.parallel([
                     Animated.timing(splashOpacity, {
                         toValue: 0,
@@ -93,7 +88,7 @@ export default function HomeScreen() {
                         useNativeDriver: true,
                     }),
                     Animated.timing(logoScale, {
-                        toValue: 1.5, // Efecto de zoom hacia la cámara al salir
+                        toValue: 1.5, 
                         duration: 800,
                         useNativeDriver: true,
                     }),
@@ -104,7 +99,7 @@ export default function HomeScreen() {
                     })
                 ])
             ]).start(() => {
-                setSplashVisible(false); // Desmontar visualmente el splash al terminar
+                setSplashVisible(false); 
             });
         }
     }, [fontsLoaded]);
@@ -116,8 +111,6 @@ export default function HomeScreen() {
                 const empresaId = await SecureStore.getItemAsync('empresa_id');
 
                 if (userId || empresaId) {
-                    // Si ya hay sesión, redirigimos. 
-                    // Nota: La animación se cortará si el router reemplaza la pantalla, lo cual es deseable para usuarios logueados.
                     router.replace('/(tabs)/dashboard');
                 }
             } catch (error) {
@@ -206,14 +199,25 @@ export default function HomeScreen() {
         );
     }
 
+    // Calculamos si es una pantalla grande para el padding
+    const isTablet = width > 500;
+
     return (
         <View style={styles.fullContainer}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-            {/* --- CONTENIDO DEL LOGIN (Animado con opacidad) --- */}
+            {/* --- CONTENIDO DEL LOGIN --- */}
             <Animated.View style={[styles.loginContentWrapper, { opacity: loginOpacity }]}>
-                <View style={{ paddingTop: safeareaInsets.top + 80, ...styles.containerLogin }}>
-
+                <View 
+                    style={[
+                        styles.containerLogin,
+                        { 
+                            // Altura dinámica responsiva
+                            paddingTop: safeareaInsets.top + height * 0.08,
+                            paddingHorizontal: isTablet ? 0 : '8%'
+                        }
+                    ]}
+                >
                     <Text style={styles.welcomeText}>BIENVENIDO A</Text>
                     <Text style={styles.Titulo}>INICIAR <Text style={{ color: COLORS.accent }}>SESIÓN</Text></Text>
                     <Text style={styles.Subtitulo}>Accede a tu ecosistema de beneficios</Text>
@@ -246,6 +250,7 @@ export default function HomeScreen() {
                             />
                         </View>
                     </View>
+                    
                     <TouchableOpacity onPress={() => router.push('/(tabs)/guest')} style={styles.registerLink}>
                         <Text style={styles.linkAccent}>Ver Como invitado</Text>
                     </TouchableOpacity>
@@ -276,7 +281,7 @@ export default function HomeScreen() {
 
             </Animated.View>
 
-            {/* --- CAPA DE ANIMACIÓN SPLASH (Se superpone) --- */}
+            {/* --- CAPA DE ANIMACIÓN SPLASH --- */}
             {splashVisible && (
                 <Animated.View
                     pointerEvents="none"
@@ -288,7 +293,8 @@ export default function HomeScreen() {
                     <Animated.Image
                         source={require('../../assets/images/animacionInicio.png')}
                         style={[
-                            styles.splashImage,
+                            // Ancho y alto reactivos basados en el width dinámico
+                            { width: width * 0.6, height: width * 0.6 },
                             { transform: [{ scale: logoScale }] }
                         ]}
                         resizeMode="contain"
@@ -305,23 +311,20 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     loginContentWrapper: {
-        flex: 1, // Ocupa todo el espacio
+        flex: 1, 
     },
-    // --- ESTILOS DE LA ANIMACIÓN ---
     splashContainer: {
-        ...StyleSheet.absoluteFillObject, // Cubre toda la pantalla
+        ...StyleSheet.absoluteFillObject, 
         backgroundColor: COLORS.background,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 100, // Se asegura de estar encima de todo
+        zIndex: 100, 
     },
-    splashImage: {
-        width: width * 0.6, // 60% del ancho de la pantalla
-        height: width * 0.6,
-    },
-    // -----------------------------
     containerLogin: {
-        paddingHorizontal: 35,
+        // --- MAGIA RESPONSIVA AQUÍ ---
+        width: '100%',
+        maxWidth: 450,
+        alignSelf: 'center',
     },
     welcomeText: {
         fontFamily: FONTS.textBold,
@@ -419,7 +422,6 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.title,
         color: COLORS.accent,
         letterSpacing: 15,
-        // --- NEÓN BRILLANTE ---
         textShadowColor: COLORS.accent,
         textShadowOffset: { width: 0, height: 0 },
         textShadowRadius: 15,

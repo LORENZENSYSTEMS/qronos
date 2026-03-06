@@ -1,11 +1,16 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { Text, View } from 'react-native';
+import { Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Close() {
-  const Insents = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+
+  // Función simple para escalar la fuente
+  const scale = width / 375;
+  const normalize = (size: number) => Math.round(size * scale);
 
   useFocusEffect(() => {
     async function CloseSession() {
@@ -23,14 +28,8 @@ export default function Close() {
   });
 
   return (
-    <View style={{ paddingTop: Insents.top }}>
-      <Text style={{ flex: 1, margin: 'auto' }}>Cerrando...</Text>
+    <View style={{ flex: 1, paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: normalize(16), fontWeight: '500' }}>Cerrando...</Text>
     </View>
   );
 }
-/*
-        await SecureStore.deleteItemAsync('user_id')
-        await SecureStore.deleteItemAsync('nameCliente')
-        await SecureStore.deleteItemAsync('empresa_id')
-        await SecureStore.deleteItemAsync('nameEmpresa')
-*/

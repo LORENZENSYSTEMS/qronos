@@ -8,9 +8,11 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    useWindowDimensions // <-- Importado para hacer la pantalla verdaderamente responsiva
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 const COLORS = {
     background: '#0f1115', 
     cardBg: '#181b21',     
@@ -30,6 +32,7 @@ const FONTS = {
 
 export default function ForgotPassword() {
     const safeareaInsets = useSafeAreaInsets();
+    const { width, height } = useWindowDimensions(); // Obtenemos las dimensiones en tiempo real
     const [email, setEmail] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -60,24 +63,37 @@ export default function ForgotPassword() {
         }
     };
 
+    // Calculamos si es una pantalla grande (ej. iPad) para ajustar paddings
+    const isTablet = width > 500;
+
     return (
         <View style={[styles.fullContainer, { paddingTop: safeareaInsets.top }]}>
-            <View style={styles.containerLogin}>
+            <View 
+                style={[
+                    styles.containerLogin, 
+                    { 
+                        // Altura dinámica: 8% del alto de la pantalla para evitar que choque
+                        marginTop: height * 0.08, 
+                        // Padding responsivo: en tabletas no hace falta padding extra porque usamos maxWidth
+                        paddingHorizontal: isTablet ? 0 : '8%' 
+                    }
+                ]}
+            >
                 
-                {/* Cabecera Estilo Index */}
+                {/* Cabecera */}
                 <Text style={styles.welcomeText}>RECUPERACIÓN</Text>
                 <Text style={styles.Titulo}>Olvidé mi clave</Text>
                 <Text style={styles.Subtitulo}>
                     Introduce tu correo electrónico y te enviaremos un enlace para que recuperes el acceso a tu cuenta.
                 </Text>
 
-                {/* Input con el mismo Shadow Wrapper de tu login */}
+                {/* Input con Shadow Wrapper */}
                 <View style={styles.inputWrapper}>
                     <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
                     <View style={styles.inputShadowContainer}>
                         <TextInput 
                             placeholder="ejemplo@correo.com" 
-                            placeholderTextColor={`${COLORS.text}60`} // Opacidad al 60%
+                            placeholderTextColor={`${COLORS.text}60`} 
                             value={email} 
                             onChangeText={setEmail}
                             style={styles.TextInput}
@@ -87,7 +103,7 @@ export default function ForgotPassword() {
                     </View>
                 </View>
 
-                {/* Botón Estilo Neón */}
+                {/* Botón */}
                 <TouchableOpacity 
                     style={[styles.button, loading && { opacity: 0.7 }]} 
                     onPress={handlePress}
@@ -100,7 +116,7 @@ export default function ForgotPassword() {
                     )}
                 </TouchableOpacity>
 
-                {/* Link para volver atrás (opcional) */}
+                {/* Link para volver atrás */}
                 <TouchableOpacity onPress={()=> router.push('/(tabs)')} style={styles.registerLink}>
                     <Text style={styles.textRegister}>
                         ¿Recordaste tu contraseña? <Text style={styles.linkAccent}>Inicia sesión</Text>
@@ -118,8 +134,10 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     containerLogin: {
-        paddingHorizontal: 35, 
-        marginTop: 50, // Espacio para que no choque arriba
+        // --- MAGIA RESPONSIVA AQUÍ ---
+        width: '100%',
+        maxWidth: 450, // En un iPad, el contenido no pasará de 450px de ancho
+        alignSelf: 'center', // Centra el contenedor en pantallas grandes
     },
     welcomeText: {
         fontFamily: FONTS.textBold,
@@ -203,6 +221,8 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.textBold,
         color: COLORS.accent,
     },
+    // Nota: Dejé footerContainer y footerText por si los vas a usar más adelante, 
+    // aunque no estaban renderizados en tu código original.
     footerContainer: {
         position: 'absolute',
         bottom: 0,

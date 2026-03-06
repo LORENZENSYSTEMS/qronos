@@ -3,9 +3,8 @@ import { useFonts } from 'expo-font';
 import { Tabs, useFocusEffect, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform, useWindowDimensions } from 'react-native';
 
-// PALETA DE COLORES QRONNOS (Sincronizada)
 const COLORS = {
     background: '#0f1115', 
     cardBg: '#181b21',     
@@ -17,23 +16,25 @@ const COLORS = {
 
 export default function TabLayout() {
     const router = useRouter();
+    const { width, height } = useWindowDimensions();
     const [empresaState, setEmpresaState] = useState(false);
     const [adminState, setAdminState] = useState(false);
 
-    // Carga de fuentes para la tipografía de la barra
+    // Función de normalización rápida
+    const scale = width / 375;
+    const normalize = (size: number) => Math.round(size * scale);
+
     const [fontsLoaded] = useFonts({
         'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
         'Poppins-Medium': require('../../../assets/fonts/Poppins-Medium.ttf'),
         'Poppins-Bold': require('../../../assets/fonts/Poppins-Bold.ttf'),
     });
 
-    // Verificación de credenciales
     useFocusEffect(
         useCallback(() => {
             const checkAuth = async () => {
                 const empresa_id = await SecureStore.getItemAsync('empresa_id');
                 const admin = await SecureStore.getItemAsync('rol');
-                
                 setEmpresaState(!!empresa_id);
                 setAdminState(admin === 'Admin');
             };
@@ -41,7 +42,6 @@ export default function TabLayout() {
         }, [])
     );
 
-    // Función de cierre de sesión
     const handleLogout = () => {
         Alert.alert("Cerrar Sesión", "¿Estás seguro de que deseas salir?", [
             { text: "Cancelar", style: "cancel" },
@@ -66,30 +66,25 @@ export default function TabLayout() {
                 tabBarActiveTintColor: COLORS.accent,
                 tabBarInactiveTintColor: COLORS.textSec,
                 headerShown: false,
-                
-                // ESTILO PROFESIONAL DE LA BARRA
                 tabBarStyle: {
                     backgroundColor: COLORS.background,
                     borderTopColor: COLORS.border,
                     borderTopWidth: 1,
-                    height: 75, // Un poco más alta para mayor comodidad
-                    paddingBottom: 15,
-                    paddingTop: 10,
+                    // Altura responsiva: base 70 + ajuste por plataforma
+                    height: Platform.OS === 'ios' ? normalize(85) : normalize(70),
+                    paddingBottom: Platform.OS === 'ios' ? normalize(25) : normalize(12),
+                    paddingTop: normalize(10),
                     elevation: 10,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: -4 },
                     shadowOpacity: 0.2,
                     shadowRadius: 10,
                 },
-                
-                // TIPOGRAFÍA APLICADA A LOS LABELS
                 tabBarLabelStyle: {
-                    fontFamily: 'Poppins-Medium', // Fuente corporativa
-                    fontSize: 11,
+                    fontFamily: 'Poppins-Medium',
+                    fontSize: normalize(10), // Texto responsivo
                     marginTop: 2,
                 },
-                
-                // Estilo para los iconos
                 tabBarIconStyle: {
                     marginBottom: -2,
                 }
@@ -101,7 +96,7 @@ export default function TabLayout() {
                     title: 'Inicio',
                     tabBarLabel: 'Inicio',
                     tabBarIcon: ({ color, focused }) => (
-                        <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
+                        <Ionicons name={focused ? "home" : "home-outline"} size={normalize(22)} color={color} />
                     ),
                 }}
             />
@@ -113,7 +108,7 @@ export default function TabLayout() {
                     tabBarLabel: 'Perfil',
                     href: empresaState ? null : undefined, 
                     tabBarIcon: ({ color, focused }) => (
-                        <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
+                        <Ionicons name={focused ? "person" : "person-outline"} size={normalize(22)} color={color} />
                     ),
                 }}
             />
@@ -125,7 +120,7 @@ export default function TabLayout() {
                     tabBarLabel: 'Empresa',
                     href: !empresaState ? null : undefined,
                     tabBarIcon: ({ color, focused }) => (
-                        <Ionicons name={focused ? "business" : "business-outline"} size={22} color={color} />
+                        <Ionicons name={focused ? "business" : "business-outline"} size={normalize(22)} color={color} />
                     ),
                 }}
             />
@@ -137,7 +132,7 @@ export default function TabLayout() {
                     tabBarLabel: 'QR',
                     href: !empresaState ? null : undefined,
                     tabBarIcon: ({ color, focused }) => (
-                        <Ionicons name={focused ? "qr-code" : "qr-code-outline"} size={22} color={color} />
+                        <Ionicons name={focused ? "qr-code" : "qr-code-outline"} size={normalize(22)} color={color} />
                     ),
                 }}
             />
@@ -149,7 +144,7 @@ export default function TabLayout() {
                     tabBarLabel: 'Admin',
                     href: !adminState ? null : undefined,
                     tabBarIcon: ({ color, focused }) => (
-                        <Ionicons name={focused ? "shield-checkmark" : "shield-checkmark-outline"} size={22} color={color} />
+                        <Ionicons name={focused ? "shield-checkmark" : "shield-checkmark-outline"} size={normalize(22)} color={color} />
                     ),
                 }}
             />
@@ -160,13 +155,12 @@ export default function TabLayout() {
                     title: 'Salir',
                     tabBarLabel: 'Salir',
                     tabBarIcon: ({ color }) => (
-                        <Ionicons name="log-out-outline" size={22} color="#ff4d4d" />
+                        <Ionicons name="log-out-outline" size={normalize(22)} color="#ff4d4d" />
                     ),
-                    // Etiqueta en rojo para resaltar acción destructiva
                     tabBarLabelStyle: {
                         color: '#ff4d4d',
                         fontFamily: 'Poppins-Bold',
-                        fontSize: 11,
+                        fontSize: normalize(10),
                     }
                 }}
                 listeners={() => ({
