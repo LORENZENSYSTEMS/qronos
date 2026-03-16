@@ -20,8 +20,9 @@ export default function TabLayout() {
     const [empresaState, setEmpresaState] = useState(false);
     const [adminState, setAdminState] = useState(false);
 
-    // Función de normalización rápida
-    const scale = width / 375;
+    // Función de normalización rápida (AJUSTADA)
+    // Usamos Math.min para limitar la escala a 1.15x como máximo en pantallas grandes (iPad)
+    const scale = Math.min(width / 375, 1.15); 
     const normalize = (size: number) => Math.round(size * scale);
 
     const [fontsLoaded] = useFonts({
