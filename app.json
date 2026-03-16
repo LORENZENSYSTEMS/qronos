@@ -38,9 +38,15 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Permite $(PRODUCT_NAME) acceder a la cámara para escanear códigos QR.",
+          "cameraPermission": "Se utilizará para que los perfiles de empresa puedan escanear códigos QR de clientes.",
           "microphonePermission": "Permite $(PRODUCT_NAME) grabar audio al capturar videos.",
           "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Se utilizará para que los perfiles de empresa puedan subir imágenes de su tienda o empresa."
         }
       ],
       "expo-router",

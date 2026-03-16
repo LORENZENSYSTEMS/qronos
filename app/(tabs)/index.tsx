@@ -1,4 +1,6 @@
+import { Camera } from 'expo-camera';
 import { useFonts } from 'expo-font';
+import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
@@ -14,7 +16,7 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    useWindowDimensions // <-- Usaremos este hook en lugar de Dimensions estático
+    useWindowDimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from '../../src/firebaseConfig';
@@ -43,7 +45,7 @@ const LOGIN_CLIENTE_URL = `${API_URL}/api/cliente/login`;
 export default function HomeScreen() {
     const safeareaInsets = useSafeAreaInsets();
     const router = useRouter();
-    const { width, height } = useWindowDimensions(); // <-- Obtiene dimensiones dinámicamente
+    const { width, height } = useWindowDimensions(); 
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -62,6 +64,43 @@ export default function HomeScreen() {
         'Poppins-Medium': require('../../assets/fonts/Poppins-Medium.ttf'),
         'Poppins-Bold': require('../../assets/fonts/Poppins-Bold.ttf'),
     });
+
+    // --- FUNCIONES DE PERMISOS ---
+    const checkCameraPermission = async () => {
+        const cameraStatus = await Camera.getCameraPermissionsAsync();
+        if (cameraStatus.status !== 'granted') {
+            Alert.alert(
+                "Acceso a la Cámara",
+                "Será utilizada solo si inicias sesión con un perfil tipo empresa para que puedas escanear los códigos QR de los clientes que lleguen a tu tienda/empresa.",
+                [
+                    { text: "Ahora no", style: "cancel" },
+                    { text: "Permitir", onPress: async () => {
+                        await Camera.requestCameraPermissionsAsync();
+                    }}
+                ]
+            );
+        }
+    };
+
+    const requestPermissions = async () => {
+        const galleryStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
+        
+        if (galleryStatus.status !== 'granted') {
+            Alert.alert(
+                "Acceso a la Galería",
+                "Será utilizado si inicias con un perfil tipo empresa para que puedas subir las imágenes de tu tienda/empresa.",
+                [
+                    { text: "Ahora no", style: "cancel", onPress: () => checkCameraPermission() },
+                    { text: "Permitir", onPress: async () => {
+                        await ImagePicker.requestMediaLibraryPermissionsAsync();
+                        checkCameraPermission();
+                    }}
+                ]
+            );
+        } else {
+            checkCameraPermission();
+        }
+    };
 
     // --- EFECTO DE ANIMACIÓN DE ENTRADA ---
     useEffect(() => {
@@ -100,6 +139,7 @@ export default function HomeScreen() {
                 ])
             ]).start(() => {
                 setSplashVisible(false); 
+                requestPermissions();
             });
         }
     }, [fontsLoaded]);
@@ -199,7 +239,6 @@ export default function HomeScreen() {
         );
     }
 
-    // Calculamos si es una pantalla grande para el padding
     const isTablet = width > 500;
 
     return (
@@ -212,7 +251,6 @@ export default function HomeScreen() {
                     style={[
                         styles.containerLogin,
                         { 
-                            // Altura dinámica responsiva
                             paddingTop: safeareaInsets.top + height * 0.08,
                             paddingHorizontal: isTablet ? 0 : '8%'
                         }
@@ -293,7 +331,6 @@ export default function HomeScreen() {
                     <Animated.Image
                         source={require('../../assets/images/animacionInicio.png')}
                         style={[
-                            // Ancho y alto reactivos basados en el width dinámico
                             { width: width * 0.6, height: width * 0.6 },
                             { transform: [{ scale: logoScale }] }
                         ]}
@@ -321,7 +358,6 @@ const styles = StyleSheet.create({
         zIndex: 100, 
     },
     containerLogin: {
-        // --- MAGIA RESPONSIVA AQUÍ ---
         width: '100%',
         maxWidth: 450,
         alignSelf: 'center',

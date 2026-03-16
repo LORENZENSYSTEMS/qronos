@@ -198,7 +198,7 @@ export default function HomeScreen() {
 
       {/* MENUS DESPLEGABLES */}
       {isCountryMenuOpen && (
-        <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 90, maxWidth: contentWidth }]}>
+        <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 80, maxWidth: contentWidth }]}>
           <Text style={styles.dropdownHeaderLabel}>Selecciona país</Text>
           {COUNTRIES_LIST.map((pais) => (
             <TouchableOpacity
@@ -216,7 +216,7 @@ export default function HomeScreen() {
       )}
 
       {isCityMenuOpen && (
-        <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 135, maxWidth: contentWidth }]}>
+        <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 125, maxWidth: contentWidth }]}>
           <Text style={styles.dropdownHeaderLabel}>Ciudades en {selectedCountry}</Text>
           {availableCities.map((ciudad) => (
             <TouchableOpacity
@@ -433,8 +433,8 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 100 },
 
   // HEADER
-  header: { backgroundColor: COLORS.background, paddingHorizontal: 24, paddingBottom: 15, zIndex: 10 },
-  headerTopRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+  header: { backgroundColor: COLORS.background, paddingHorizontal: 24, paddingBottom: 5, zIndex: 10 },
+  headerTopRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
   headerSubtitle: { fontFamily: FONTS.textBold, fontSize: 9, color: COLORS.accent, letterSpacing: 4, marginBottom: 2, textAlign: 'center' },
   headerTitle: { fontFamily: FONTS.title, fontSize: 24, color: COLORS.text, letterSpacing: 1, textAlign: 'center' },
 
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   activeDropdownText: { color: COLORS.accent, fontFamily: FONTS.textBold },
 
   // CATEGORIES
-  categoriesContainer: { marginTop: 20, marginBottom: 15 },
+  categoriesContainer: { marginTop: 10, marginBottom: 15 },
   tabItem: { marginRight: 15, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.border },
   tabItemActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   tabText: { fontSize: 13, color: COLORS.textSec, fontFamily: FONTS.textMedium },
