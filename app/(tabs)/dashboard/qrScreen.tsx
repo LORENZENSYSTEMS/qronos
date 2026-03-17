@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as SecureStore from 'expo-secure-store';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { Linking, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function QRScreen() {
@@ -14,7 +14,18 @@ export default function QRScreen() {
     // Valores responsivos
     const scale = width / 375;
     const normalize = (size: number) => Math.round(size * scale);
-    const cameraSize = width * 0.75; // El visor ocupará el 75% del ancho de la pantalla
+    const cameraSize = width * 0.75; 
+
+    // Función para manejar el botón de permisos
+    const handlePermission = async () => {
+        if (permission && !permission.canAskAgain && !permission.granted) {
+            // Si el usuario ya denegó y el sistema no permite preguntar de nuevo, abrimos ajustes
+            await Linking.openSettings();
+        } else {
+            // De lo contrario, lanzamos la petición nativa
+            await requestPermission();
+        }
+    };
 
     async function CreateMetricasQr(qr_token: string, puntos: number) {
         const empresa_id = await SecureStore.getItemAsync('empresa_id');
@@ -45,9 +56,11 @@ export default function QRScreen() {
     if (!permission.granted) {
         return (
             <View style={[styles.centerContainer, { paddingTop: insets.top }]}>
-                <Text style={styles.infoText}>Necesitamos permiso para acceder a la cámara.</Text>
-                <TouchableOpacity onPress={requestPermission} style={styles.permissionBtn}>
-                    <Text style={styles.permissionBtnText}>Conceder permiso</Text>
+                <Text style={styles.infoText}>Necesitamos acceso a la cámara para escanear los códigos QR.</Text>
+                <TouchableOpacity onPress={handlePermission} style={styles.permissionBtn}>
+                    <Text style={styles.permissionBtnText}>
+                        {permission.canAskAgain ? "Continuar" : "Abrir Ajustes"}
+                    </Text>
                 </TouchableOpacity>
             </View>
         );

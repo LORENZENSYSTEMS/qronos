@@ -66,42 +66,43 @@ export default function HomeScreen() {
     });
 
     // --- FUNCIONES DE PERMISOS ---
-    const checkCameraPermission = async () => {
-        const cameraStatus = await Camera.getCameraPermissionsAsync();
-        if (cameraStatus.status !== 'granted') {
-            Alert.alert(
-                "Acceso a la Cámara",
-                "Será utilizada solo si inicias sesión con un perfil tipo empresa para que puedas escanear los códigos QR de los clientes que lleguen a tu tienda/empresa.",
-                [
-                    { text: "Ahora no", style: "cancel" },
-                    { text: "Permitir", onPress: async () => {
-                        await Camera.requestCameraPermissionsAsync();
-                    }}
-                ]
-            );
-        }
-    };
+    const checkCameraPermission = async () => {
+        const cameraStatus = await Camera.getCameraPermissionsAsync();
+        if (cameraStatus.status !== 'granted') {
+            Alert.alert(
+                "Acceso a la Cámara",
+                "Será utilizada solo si inicias sesión con un perfil tipo empresa para que puedas escanear los códigos QR de los clientes que lleguen a tu tienda/empresa.",
+                [
+                    { text: "Ahora no", style: "cancel" },
+                    // CORRECCIÓN: Se cambia "Permitir" por "Continuar"
+                    { text: "Continuar", onPress: async () => {
+                        await Camera.requestCameraPermissionsAsync();
+                    }}
+                ]
+            );
+        }
+    };
 
-    const requestPermissions = async () => {
-        const galleryStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
-        
-        if (galleryStatus.status !== 'granted') {
-            Alert.alert(
-                "Acceso a la Galería",
-                "Será utilizado si inicias con un perfil tipo empresa para que puedas subir las imágenes de tu tienda/empresa.",
-                [
-                    { text: "Ahora no", style: "cancel", onPress: () => checkCameraPermission() },
-                    { text: "Permitir", onPress: async () => {
-                        await ImagePicker.requestMediaLibraryPermissionsAsync();
-                        checkCameraPermission();
-                    }}
-                ]
-            );
-        } else {
-            checkCameraPermission();
-        }
-    };
-
+    const requestPermissions = async () => {
+        const galleryStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
+        
+        if (galleryStatus.status !== 'granted') {
+            Alert.alert(
+                "Acceso a la Galería",
+                "Será utilizado si inicias con un perfil tipo empresa para que puedas subir las imágenes de tu tienda/empresa.",
+                [
+                    { text: "Ahora no", style: "cancel", onPress: () => checkCameraPermission() },
+                    // CORRECCIÓN: Se cambia "Permitir" por "Continuar"
+                    { text: "Continuar", onPress: async () => {
+                        await ImagePicker.requestMediaLibraryPermissionsAsync();
+                        checkCameraPermission();
+                    }}
+                ]
+            );
+        } else {
+            checkCameraPermission();
+        }
+    };
     // --- EFECTO DE ANIMACIÓN DE ENTRADA ---
     useEffect(() => {
         if (fontsLoaded) {
