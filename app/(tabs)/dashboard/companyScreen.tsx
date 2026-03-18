@@ -9,6 +9,8 @@ import {
     Alert,
     Image,
     KeyboardAvoidingView,
+    Modal // <-- IMPORTANTE: Añadido Modal
+    ,
     Platform,
     SafeAreaView,
     ScrollView,
@@ -43,6 +45,14 @@ const FONTS = {
 
 // --- CATEGORÍAS PERMITIDAS ---
 const VALID_CATEGORIES = ["Restaurantes", "Bar", "Tiendas"];
+
+// --- UBICACIONES DISPONIBLES ---
+const LOCATIONS = {
+    "Colombia": ["Cartagena de Indias"],
+    "Emiratos Árabes Unidos": ["Dubái"],
+    "Argentina": ["Rosario"]
+};
+const COUNTRIES = Object.keys(LOCATIONS);
 
 // --- HOOK DE AUTORIZACIÓN ---
 const useEmpresaCheck = () => {
@@ -89,14 +99,17 @@ export default function CompanyScreen() {
     const navigator = useNavigation();
     const { isAuthorized, isLoading, errorMessage, empresaId } = useEmpresaCheck();
 
-    // Detección de dimensiones para responsividad
     const { width } = useWindowDimensions();
-    const isTablet = width >= 768; // Detecta iPad o tablets grandes
-    const isSmallScreen = width < 380; // Detecta iPhone SE o Androids pequeños
+    const isTablet = width >= 768; 
+    const isSmallScreen = width < 380; 
 
     const [totalScans, setTotalScans] = useState<number | null>(null);
     const [totalPoints, setTotalPoints] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+
+    // --- ESTADOS PARA LOS MENÚS DESPLEGABLES ---
+    const [countryModalVisible, setCountryModalVisible] = useState(false);
+    const [cityModalVisible, setCityModalVisible] = useState(false);
 
     // --- ESTADO DEL FORMULARIO ---
     const [formData, setFormData] = useState({
@@ -105,7 +118,7 @@ export default function CompanyScreen() {
         descuento: '',
         pais: '',
         ciudad: '',
-        categoria: 'Restaurantes', // Valor por defecto válido
+        categoria: 'Restaurantes',
         fotoPerfil: null as string | null,
         fotoDescripcion1: null as string | null,
         fotoDescripcion2: null as string | null,
@@ -119,16 +132,10 @@ export default function CompanyScreen() {
         'Poppins-Bold': require('../../../assets/fonts/Poppins-Bold.ttf'),
     });
 
-    // =========================================================================
-    // LÓGICA DE API (USANDO EXPO_PUBLIC_API_URL)
-    // =========================================================================
-
-    // 1. OBTENER DATOS (GET)
     const getEmpresaData = async (id: string) => {
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-            // A. Obtener Métricas
             const responseMetricas = await fetch(`${API_URL}/api/metricas/empresa/${id}`);
             const metricas = await responseMetricas.json();
 
@@ -142,12 +149,9 @@ export default function CompanyScreen() {
                 setTotalPoints(0);
             }
 
-            // B. Obtener Perfil
             const responseEmpresa = await fetch(`${API_URL}/api/empresa/${id}`);
             if (responseEmpresa.ok) {
                 const data = await responseEmpresa.json();
-
-                // Validar categoría entrante
                 const catFromBd = data.categoria;
                 const finalCat = VALID_CATEGORIES.includes(catFromBd) ? catFromBd : VALID_CATEGORIES[0];
 
@@ -170,7 +174,6 @@ export default function CompanyScreen() {
         }
     };
 
-    // 2. ACTUALIZAR DATOS (PUT)
     const updateEmpresaData = async () => {
         if (!empresaId) return;
         setIsSaving(true);
@@ -205,9 +208,7 @@ export default function CompanyScreen() {
 
             const response = await fetch(`${API_URL}/api/empresa/${empresaId}`, {
                 method: 'PUT',
-                headers: {
-                    'Accept': 'application/json'
-                },
+                headers: { 'Accept': 'application/json' },
                 body: data
             });
 
@@ -226,14 +227,12 @@ export default function CompanyScreen() {
         }
     };
 
-    // --- EFECTOS ---
     useEffect(() => {
         if (isAuthorized && empresaId) {
             getEmpresaData(empresaId);
         }
     }, [isAuthorized, empresaId]);
 
-    // --- PICKER DE IMAGEN ---
     const pickImage = async (field: keyof typeof formData) => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -271,6 +270,10 @@ export default function CompanyScreen() {
         );
     }
 
+    // Ciudades disponibles basadas en el país seleccionado
+    // @ts-ignore
+    const availableCities = formData.pais && LOCATIONS[formData.pais] ? LOCATIONS[formData.pais] : [];
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
             <KeyboardAvoidingView
@@ -281,13 +284,11 @@ export default function CompanyScreen() {
                     style={styles.scrollViewStyle} 
                     contentContainerStyle={[
                         styles.companyContainer,
-                        // Limita el ancho en tablets y lo centra para que no se vea estirado
                         isTablet && { maxWidth: 800, alignSelf: 'center', width: '100%' }
                     ]}
                 >
                     <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-                    {/* HEADER */}
                     <View style={styles.headerRow}>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.welcomeText}>ESTADÍSTICAS</Text>
@@ -297,7 +298,6 @@ export default function CompanyScreen() {
                         </View>
                     </View>
 
-                    {/* MÉTRICAS (Flex direction condicional en pantallas muy chicas si se desea, pero en Row con Flex 1 funciona bien) */}
                     <View style={{ marginTop: width > 400 ? 40 : 25 }}>
                         <View style={styles.card}>
                             <View style={styles.iconCircle}>
@@ -324,11 +324,9 @@ export default function CompanyScreen() {
                         </View>
                     </View>
 
-                    {/* --- SECCIÓN: CONFIGURACIÓN --- */}
                     <View style={styles.divider} />
                     <Text style={styles.sectionTitle}>CONFIGURACIÓN DE PERFIL</Text>
 
-                    {/* AVISO IMPORTANTE SOBRE EL INDEX */}
                     <View style={styles.infoBoxIndex}>
                         <Ionicons name="eye" size={20} color={COLORS.accent} />
                         <Text style={styles.infoTextIndex}>
@@ -339,7 +337,6 @@ export default function CompanyScreen() {
 
                     <View style={styles.formContainer}>
 
-                        {/* FOTO PERFIL */}
                         <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 10 }}>
                             <Text style={[styles.label, { alignSelf: 'center', marginBottom: 10 }]}>Logo de la Empresa</Text>
                             <TouchableOpacity onPress={() => pickImage('fotoPerfil')} style={styles.profileImageContainer}>
@@ -356,7 +353,6 @@ export default function CompanyScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* SELECCIÓN DE CATEGORÍA (RESTRINGIDA Y RESPONSIVA) */}
                         <Text style={styles.label}>Categoría (Selecciona una)</Text>
                         <View style={[styles.categoryContainer, isSmallScreen && { flexWrap: 'wrap' }]}>
                             {VALID_CATEGORIES.map((cat) => (
@@ -365,7 +361,6 @@ export default function CompanyScreen() {
                                     style={[
                                         styles.categoryChip,
                                         formData.categoria === cat && styles.categoryChipActive,
-                                        // En pantallas pequeñas, si hace wrap, aseguramos que ocupen al menos el 40%
                                         isSmallScreen && { minWidth: '45%' }
                                     ]}
                                     onPress={() => setFormData({ ...formData, categoria: cat })}
@@ -373,7 +368,7 @@ export default function CompanyScreen() {
                                     <Text style={[
                                         styles.categoryChipText,
                                         formData.categoria === cat && styles.categoryChipTextActive,
-                                        isSmallScreen && { fontSize: 11 } // Letra un poquito más pequeña si es necesario
+                                        isSmallScreen && { fontSize: 11 }
                                     ]}>
                                         {cat}
                                     </Text>
@@ -391,27 +386,35 @@ export default function CompanyScreen() {
                             onChangeText={(t) => setFormData({ ...formData, descripcion: t })}
                         />
 
-                        {/* ENTRADAS EN FILA RESPONSIVAS */}
+                        {/* --- SELECTORES DE PAÍS Y CIUDAD --- */}
                         <View style={[styles.rowInputs, isSmallScreen && { flexDirection: 'column' }]}>
                             <View style={{ flex: 1, marginRight: isSmallScreen ? 0 : 10 }}>
                                 <Text style={styles.label}>País</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="País"
-                                    placeholderTextColor={COLORS.textSec}
-                                    value={formData.pais}
-                                    onChangeText={(t) => setFormData({ ...formData, pais: t })}
-                                />
+                                <TouchableOpacity 
+                                    style={[styles.input, { justifyContent: 'center' }]} 
+                                    onPress={() => setCountryModalVisible(true)}
+                                >
+                                    <Text style={{ color: formData.pais ? COLORS.text : COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 14 }}>
+                                        {formData.pais || "Seleccionar..."}
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.label}>Ciudad</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Ciudad"
-                                    placeholderTextColor={COLORS.textSec}
-                                    value={formData.ciudad}
-                                    onChangeText={(t) => setFormData({ ...formData, ciudad: t })}
-                                />
+                                <TouchableOpacity 
+                                    style={[styles.input, { justifyContent: 'center' }]} 
+                                    onPress={() => {
+                                        if(!formData.pais) {
+                                            Alert.alert("Atención", "Primero debes seleccionar un país.");
+                                        } else {
+                                            setCityModalVisible(true);
+                                        }
+                                    }}
+                                >
+                                    <Text style={{ color: formData.ciudad ? COLORS.text : COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 14 }}>
+                                        {formData.ciudad || "Seleccionar..."}
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
 
@@ -433,14 +436,12 @@ export default function CompanyScreen() {
                             onChangeText={(t) => setFormData({ ...formData, ubicacionMaps: t })}
                         />
 
-                        {/* GALERÍA RESPONSIVA */}
                         <Text style={styles.label}>Fotos para el Index (Opcional)</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
                             {['fotoDescripcion1', 'fotoDescripcion2', 'fotoDescripcion3'].map((field, index) => (
                                 <TouchableOpacity
                                     key={field}
                                     onPress={() => pickImage(field as keyof typeof formData)}
-                                    // Cálculo dinámico del ancho según la pantalla
                                     style={[styles.galleryImageContainer, { width: width * 0.28, height: (width * 0.28) * 0.75, maxWidth: 150, maxHeight: 110 }]}
                                 >
                                     {/* @ts-ignore */}
@@ -472,6 +473,56 @@ export default function CompanyScreen() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* --- MODAL DE PAÍSES --- */}
+            <Modal visible={countryModalVisible} transparent animationType="fade">
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCountryModalVisible(false)}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Selecciona el País</Text>
+                        {COUNTRIES.map(c => (
+                            <TouchableOpacity 
+                                key={c} 
+                                style={styles.modalOption} 
+                                onPress={() => {
+                                    // Al cambiar de país, reseteamos la ciudad para evitar inconsistencias
+                                    setFormData({ ...formData, pais: c, ciudad: '' }); 
+                                    setCountryModalVisible(false);
+                                }}
+                            >
+                                <Text style={[
+                                    styles.modalOptionText,
+                                    formData.pais === c && { color: COLORS.accent, fontFamily: FONTS.textBold }
+                                ]}>{c}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* --- MODAL DE CIUDADES --- */}
+            <Modal visible={cityModalVisible} transparent animationType="fade">
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCityModalVisible(false)}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Selecciona la Ciudad</Text>
+                        {availableCities.map((city: string) => (
+                            <TouchableOpacity 
+                                key={city} 
+                                style={styles.modalOption} 
+                                onPress={() => {
+                                    setFormData({ ...formData, ciudad: city });
+                                    setCityModalVisible(false);
+                                }}
+                            >
+                                <Text style={[
+                                    styles.modalOptionText,
+                                    formData.ciudad === city && { color: COLORS.accent, fontFamily: FONTS.textBold }
+                                ]}>{city}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
         </SafeAreaView>
     );
 }
@@ -608,7 +659,8 @@ const styles = StyleSheet.create({
         color: COLORS.text,
         fontFamily: FONTS.textRegular,
         marginBottom: 16,
-        fontSize: 14
+        fontSize: 14,
+        height: 50, // Fijado para que text inputs y botones coincidan en tamaño
     },
     categoryContainer: {
         flexDirection: 'row',
@@ -709,5 +761,41 @@ const styles = StyleSheet.create({
         color: COLORS.textSec,
         fontSize: 10,
         marginTop: 4
+    },
+
+    // --- ESTILOS DE LOS MODALES ---
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+    },
+    modalContent: {
+        backgroundColor: COLORS.cardBg,
+        width: '100%',
+        maxWidth: 400,
+        borderRadius: 16,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: COLORS.border
+    },
+    modalTitle: {
+        color: COLORS.text,
+        fontFamily: FONTS.title,
+        fontSize: 16,
+        marginBottom: 15,
+        textAlign: 'center'
+    },
+    modalOption: {
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border
+    },
+    modalOptionText: {
+        color: COLORS.textSec,
+        fontFamily: FONTS.textRegular,
+        fontSize: 14,
+        textAlign: 'center'
     }
 });

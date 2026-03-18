@@ -46,8 +46,9 @@ type Category = 'Todos' | 'Restaurantes' | 'Tiendas' | 'Bar' | string;
 const CATEGORIES: Category[] = ['Todos', 'Restaurantes', 'Bar', "Tiendas"];
 
 const COUNTRIES_CONFIG: { [key: string]: string[] } = {
-  'Colombia': ['Todas', 'Cartagena', 'Barranquilla'],
-  'España': ['Todas', 'Madrid'],
+  'Colombia': ['Todas', 'Cartagena de Indias'],
+  'Emiratos Árabes Unidos': ['Todas', 'Dubái'],
+  'Argentina': ['Todas', 'Rosario']
 };
 
 const COUNTRIES_LIST = Object.keys(COUNTRIES_CONFIG);
