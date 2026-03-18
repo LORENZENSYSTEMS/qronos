@@ -9,6 +9,9 @@
       }
     },
     "production": {
+      "android": {
+        "autoIncrement": true
+      },
       "ios": {
         "autoIncrement": true
       }
