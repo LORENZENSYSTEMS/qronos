@@ -6,12 +6,12 @@ import { useCallback, useState } from 'react';
 import { Alert, Platform, useWindowDimensions } from 'react-native';
 
 const COLORS = {
-    background: '#0f1115', 
-    cardBg: '#181b21',     
-    accent: '#01c38e',     
-    text: '#ffffff',       
-    textSec: '#8b9bb4',    
-    border: '#232936'      
+    background: '#0f1115',
+    cardBg: '#181b21',
+    accent: '#01c38e',
+    text: '#ffffff',
+    textSec: '#8b9bb4',
+    border: '#232936'
 };
 
 export default function TabLayout() {
@@ -22,7 +22,7 @@ export default function TabLayout() {
 
     // Función de normalización rápida (AJUSTADA)
     // Usamos Math.min para limitar la escala a 1.15x como máximo en pantallas grandes (iPad)
-    const scale = Math.min(width / 375, 1.15); 
+    const scale = Math.min(width / 375, 1.15);
     const normalize = (size: number) => Math.round(size * scale);
 
     const [fontsLoaded] = useFonts({
@@ -46,14 +46,14 @@ export default function TabLayout() {
     const handleLogout = () => {
         Alert.alert("Cerrar Sesión", "¿Estás seguro de que deseas salir?", [
             { text: "Cancelar", style: "cancel" },
-            { 
-                text: "Sí, salir", 
+            {
+                text: "Sí, salir",
                 style: "destructive",
                 onPress: async () => {
                     await SecureStore.deleteItemAsync('empresa_id');
                     await SecureStore.deleteItemAsync('user_id');
                     await SecureStore.deleteItemAsync('rol');
-                    router.replace('/'); 
+                    router.replace('/');
                 }
             }
         ]);
@@ -107,7 +107,7 @@ export default function TabLayout() {
                 options={{
                     title: 'Mi Perfil',
                     tabBarLabel: 'Perfil',
-                    href: empresaState ? null : undefined, 
+                    href: empresaState ? null : undefined,
                     tabBarIcon: ({ color, focused }) => (
                         <Ionicons name={focused ? "person" : "person-outline"} size={normalize(22)} color={color} />
                     ),
@@ -170,6 +170,14 @@ export default function TabLayout() {
                         handleLogout();
                     },
                 })}
+            />
+            <Tabs.Screen
+                name="products"
+                options={{
+                    title: 'Productos',
+                    tabBarLabel: 'Productos',
+                    href: null,
+                }}
             />
         </Tabs>
     );

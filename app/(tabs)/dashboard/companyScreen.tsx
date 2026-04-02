@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from "expo-router";
+import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from "react";
 import {
@@ -11,8 +11,11 @@ import {
     KeyboardAvoidingView,
     Modal // <-- IMPORTANTE: Añadido Modal
     ,
+
+
+
+
     Platform,
-    SafeAreaView,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -22,6 +25,7 @@ import {
     View,
     useWindowDimensions
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // --- PALETA QRONNOS ---
 const COLORS = {
@@ -97,11 +101,13 @@ const useEmpresaCheck = () => {
 
 export default function CompanyScreen() {
     const navigator = useNavigation();
+    const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { isAuthorized, isLoading, errorMessage, empresaId } = useEmpresaCheck();
 
     const { width } = useWindowDimensions();
-    const isTablet = width >= 768; 
-    const isSmallScreen = width < 380; 
+    const isTablet = width >= 768;
+    const isSmallScreen = width < 380;
 
     const [totalScans, setTotalScans] = useState<number | null>(null);
     const [totalPoints, setTotalPoints] = useState<number | null>(null);
@@ -254,7 +260,7 @@ export default function CompanyScreen() {
 
     if (!fontsLoaded || isLoading) {
         return (
-            <View style={styles.centerContainer}>
+            <View style={[styles.centerContainer, { paddingTop: insets.top }]}>
                 <ActivityIndicator size="large" color={COLORS.accent} />
             </View>
         );
@@ -262,7 +268,7 @@ export default function CompanyScreen() {
 
     if (!isAuthorized) {
         return (
-            <View style={styles.centerContainer}>
+            <View style={[styles.centerContainer, { paddingTop: insets.top }]}>
                 <Ionicons name="lock-closed-outline" size={60} color={COLORS.accent} style={{ marginBottom: 20 }} />
                 <Text style={styles.textBase}>ACCESO DENEGADO</Text>
                 <Text style={styles.subText}>{errorMessage}</Text>
@@ -275,13 +281,13 @@ export default function CompanyScreen() {
     const availableCities = formData.pais && LOCATIONS[formData.pais] ? LOCATIONS[formData.pais] : [];
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
+        <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
-                <ScrollView 
-                    style={styles.scrollViewStyle} 
+                <ScrollView
+                    style={styles.scrollViewStyle}
                     contentContainerStyle={[
                         styles.companyContainer,
                         isTablet && { maxWidth: 800, alignSelf: 'center', width: '100%' }
@@ -322,6 +328,18 @@ export default function CompanyScreen() {
                                 </Text>
                             </View>
                         </View>
+
+                        {/* --- BOTÓN GESTIÓN DE PRODUCTOS --- */}
+                        <TouchableOpacity
+                            style={styles.productsLinkBtn}
+                            onPress={() => router.push('/(tabs)/dashboard/products' as any)}
+                        >
+                            <View style={styles.productsLinkContent}>
+                                <Ionicons name="cube" size={20} color="#000" />
+                                <Text style={styles.productsLinkText}>GESTIONAR PRODUCTOS</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color="#000" />
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.divider} />
@@ -390,8 +408,8 @@ export default function CompanyScreen() {
                         <View style={[styles.rowInputs, isSmallScreen && { flexDirection: 'column' }]}>
                             <View style={{ flex: 1, marginRight: isSmallScreen ? 0 : 10 }}>
                                 <Text style={styles.label}>País</Text>
-                                <TouchableOpacity 
-                                    style={[styles.input, { justifyContent: 'center' }]} 
+                                <TouchableOpacity
+                                    style={[styles.input, { justifyContent: 'center' }]}
                                     onPress={() => setCountryModalVisible(true)}
                                 >
                                     <Text style={{ color: formData.pais ? COLORS.text : COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 14 }}>
@@ -401,10 +419,10 @@ export default function CompanyScreen() {
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.label}>Ciudad</Text>
-                                <TouchableOpacity 
-                                    style={[styles.input, { justifyContent: 'center' }]} 
+                                <TouchableOpacity
+                                    style={[styles.input, { justifyContent: 'center' }]}
                                     onPress={() => {
-                                        if(!formData.pais) {
+                                        if (!formData.pais) {
                                             Alert.alert("Atención", "Primero debes seleccionar un país.");
                                         } else {
                                             setCityModalVisible(true);
@@ -480,12 +498,12 @@ export default function CompanyScreen() {
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Selecciona el País</Text>
                         {COUNTRIES.map(c => (
-                            <TouchableOpacity 
-                                key={c} 
-                                style={styles.modalOption} 
+                            <TouchableOpacity
+                                key={c}
+                                style={styles.modalOption}
                                 onPress={() => {
                                     // Al cambiar de país, reseteamos la ciudad para evitar inconsistencias
-                                    setFormData({ ...formData, pais: c, ciudad: '' }); 
+                                    setFormData({ ...formData, pais: c, ciudad: '' });
                                     setCountryModalVisible(false);
                                 }}
                             >
@@ -505,9 +523,9 @@ export default function CompanyScreen() {
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Selecciona la Ciudad</Text>
                         {availableCities.map((city: string) => (
-                            <TouchableOpacity 
-                                key={city} 
-                                style={styles.modalOption} 
+                            <TouchableOpacity
+                                key={city}
+                                style={styles.modalOption}
                                 onPress={() => {
                                     setFormData({ ...formData, ciudad: city });
                                     setCityModalVisible(false);
@@ -523,7 +541,7 @@ export default function CompanyScreen() {
                 </TouchableOpacity>
             </Modal>
 
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -555,7 +573,6 @@ const styles = StyleSheet.create({
     },
     companyContainer: {
         paddingHorizontal: '6%',
-        paddingTop: Platform.OS === 'ios' ? 10 : 24,
         paddingBottom: 50
     },
     headerRow: {
@@ -797,5 +814,31 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.textRegular,
         fontSize: 14,
         textAlign: 'center'
+    },
+    // --- ESTILOS ADICIONALES ---
+    productsLinkBtn: {
+        backgroundColor: COLORS.accent,
+        borderRadius: 18,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 10,
+        marginBottom: 10,
+        elevation: 5,
+        shadowColor: COLORS.accent,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+    },
+    productsLinkContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    productsLinkText: {
+        color: '#000',
+        fontFamily: FONTS.title,
+        fontSize: 14,
+        marginLeft: 10,
     }
 });

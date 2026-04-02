@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import React, { useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -71,10 +73,58 @@ interface Lugar {
 import { useCompanies } from '../../../hooks/useCompanies';
 import { useFavorites } from '../../../hooks/useFavorites';
 
+const CompanyProducts = ({ empresaId }: { empresaId: number }) => {
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+        const response = await fetch(`${baseUrl}/api/empresas/${empresaId}/productos`);
+        if (response.ok) {
+          const data = await response.json();
+          setProducts(data);
+        }
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProducts();
+  }, [empresaId]);
+
+  if (loading) return <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 30 }} />;
+  if (products.length === 0) return null;
+
+  return (
+    <View style={{ marginVertical: 20 }}>
+      <Text style={styles.sectionTitle}>PRODUCTOS DISPONIBLES</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
+        {products.map((item) => (
+          <View key={item.producto_id} style={styles.productMiniCard}>
+            <Image
+              source={{ uri: item.imagenUrl || 'https://via.placeholder.com/150' }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+            <View style={styles.productInfo}>
+              <Text style={styles.productName} numberOfLines={1}>{item.nombre}</Text>
+              <Text style={styles.productPrice}>${Number(item.precio).toLocaleString()}</Text>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
+
 export default function HomeScreen() {
   const navigator: any = useNavigation();
+  const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
-  
+
   // Hooks dinámicos para responsividad
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
@@ -100,6 +150,17 @@ export default function HomeScreen() {
   const [isCountryMenuOpen, setIsCountryMenuOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState<string>('Todas');
   const [isCityMenuOpen, setIsCityMenuOpen] = useState(false);
+  const [isEmpresa, setIsEmpresa] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      const checkRole = async () => {
+        const empresaId = await SecureStore.getItemAsync('empresa_id');
+        setIsEmpresa(!!empresaId);
+      };
+      checkRole();
+    }, [])
+  );
 
   const fetchLugares = async () => {
     // Logic moved to useCompanies hook
@@ -387,21 +448,29 @@ export default function HomeScreen() {
                 <Text style={styles.modalSubtitle}>{selectedLugar?.categoria} • {selectedLugar?.ciudad}</Text>
               </View>
 
-              {selectedLugar?.descuentos && (
-                <View style={styles.modalPromoBox}>
+              {selectedLugar?.descuentos && !isEmpresa && (
+                <TouchableOpacity
+                  style={styles.modalPromoBox}
+                  onPress={() => {
+                    setModalVisible(false);
+                    router.push('/(tabs)/dashboard/profileScreen' as any);
+                  }}
+                  activeOpacity={0.8}
+                >
                   <Ionicons name="star" size={20} color={COLORS.gold} />
                   <View style={{ marginLeft: 10, flex: 1 }}>
                     <Text style={styles.modalPromoTitle}>Beneficio Exclusivo</Text>
                     <Text style={styles.modalPromoVal}>{selectedLugar.descuentos}</Text>
                   </View>
-                </View>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.textSec} />
+                </TouchableOpacity>
               )}
 
               <Text style={styles.sectionTitle}>SOBRE EL LUGAR</Text>
               <Text style={styles.modalDesc}>{selectedLugar?.descripcion}</Text>
 
               {(selectedLugar?.img1 || selectedLugar?.img2 || selectedLugar?.img3) && (
-                <View style={{ marginVertical: 20 }}>
+                <View style={{ marginVertical: 10 }}>
                   <Text style={styles.sectionTitle}>GALERÍA</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {[selectedLugar.img1, selectedLugar.img2, selectedLugar.img3].map((img, idx) => (
@@ -410,6 +479,8 @@ export default function HomeScreen() {
                   </ScrollView>
                 </View>
               )}
+
+              {selectedLugar && <CompanyProducts empresaId={selectedLugar.id} />}
 
               <TouchableOpacity
                 onPress={() => handleOpenMaps(selectedLugar?.mapLink)}
@@ -532,5 +603,40 @@ const styles = StyleSheet.create({
   galleryImg: { width: 140, height: 90, borderRadius: 12, marginRight: 10, backgroundColor: '#222' },
 
   mainActionBtn: { backgroundColor: COLORS.accent, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 18, marginBottom: 20, shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, elevation: 8 },
-  mainActionBtnText: { color: COLORS.background, fontFamily: FONTS.textBold, fontSize: 16, marginRight: 8 }
+  mainActionBtnText: { color: COLORS.background, fontFamily: FONTS.textBold, fontSize: 16, marginRight: 8 },
+
+  // PRODUCT MINI CARD
+  productMiniCard: {
+    width: 140,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    marginRight: 15,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  productImage: {
+    width: '100%',
+    height: 90,
+    backgroundColor: '#1a1d24',
+  },
+  productInfo: {
+    padding: 10,
+  },
+  productName: {
+    color: COLORS.text,
+    fontFamily: FONTS.textBold,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  productPrice: {
+    color: COLORS.accent,
+    fontFamily: FONTS.textMedium,
+    fontSize: 13,
+  }
 });

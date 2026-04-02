@@ -1,19 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
+import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
-  View,
-  useWindowDimensions
+  useWindowDimensions,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -58,7 +60,7 @@ interface EmpresaConEstadisticas extends Empresa {
 }
 
 export default function AdminDashboardScreen() {
-  const navigator = useNavigation();
+  const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
   const { width } = useWindowDimensions(); // Reemplaza Dimensions.get('window')
 
@@ -67,6 +69,18 @@ export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [jwtState, setJwt] = useState<string | null>(null);
+
+  // --- ESTADOS PARA REGISTRO ---
+  const [modalRegistroVisible, setModalRegistroVisible] = useState(false);
+  const [isRegistrando, setIsRegistrando] = useState(false);
+  const [formData, setFormData] = useState({
+    nombre: '',
+    correo: '',
+    password: '',
+    categoria: 'Restaurantes',
+    pais: 'Colombia',
+    ciudad: 'Cartagena de Indias'
+  });
 
   const [fontsLoaded] = useFonts({
     'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
@@ -77,7 +91,7 @@ export default function AdminDashboardScreen() {
 
   // Generador dinámico de estilos responsivos
   const styles = useMemo(() => getResponsiveStyles(width, safeAreaInsets.top), [width, safeAreaInsets.top]);
-  
+
   // Función para escalar valores dentro del componente (para estilos inline)
   const normalize = useMemo(() => {
     const scale = width / 375;
@@ -87,6 +101,14 @@ export default function AdminDashboardScreen() {
   useEffect(() => {
     const loadJwt = async () => {
       const jwt = await SecureStore.getItemAsync('jwt');
+      const rol = await SecureStore.getItemAsync('rol');
+
+      if (rol !== 'Admin') {
+        Alert.alert("Acceso Denegado", "No tienes permisos de administrador.");
+        router.back();
+        return;
+      }
+
       setJwt(jwt);
     };
     loadJwt();
@@ -169,6 +191,51 @@ export default function AdminDashboardScreen() {
     </View>
   );
 
+  const handleRegistro = async () => {
+    if (!formData.nombre || !formData.correo || !formData.password) {
+      Alert.alert("Campos incompletos", "Por favor completa todos los campos obligatorios.");
+      return;
+    }
+
+    setIsRegistrando(true);
+    try {
+      const response = await fetch(`${API_URL}/api/empresa/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwtState}`
+        },
+        body: JSON.stringify({
+          nombreCompleto: formData.nombre,
+          correo: formData.correo.trim().toLowerCase(),
+          contrasena: formData.password
+        })
+      });
+
+      if (response.ok) {
+        Alert.alert("Éxito", "Empresa registrada correctamente.");
+        setModalRegistroVisible(false);
+        setFormData({
+          nombre: '',
+          correo: '',
+          password: '',
+          categoria: 'Restaurantes',
+          pais: 'Colombia',
+          ciudad: 'Cartagena de Indias'
+        });
+        fetchData();
+      } else {
+        const err = await response.json();
+        Alert.alert("Error", err.message || "No se pudo registrar la empresa.");
+      }
+    } catch (error) {
+      console.error("Error en registro:", error);
+      Alert.alert("Error", "Error de conexión.");
+    } finally {
+      setIsRegistrando(false);
+    }
+  };
+
   if (!fontsLoaded || loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -186,7 +253,7 @@ export default function AdminDashboardScreen() {
 
       {/* Header Estilo Premium */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigator.goBack()} style={styles.headerBtn}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <Ionicons name="chevron-back" size={normalize(24)} color={COLORS.text} />
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
@@ -266,6 +333,73 @@ export default function AdminDashboardScreen() {
         )}
         <View style={{ height: normalize(40) }} />
       </ScrollView>
+
+      {/* FAB - BOTÓN DE REGISTRO */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setModalRegistroVisible(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={normalize(30)} color="#000" />
+      </TouchableOpacity>
+
+      {/* MODAL DE REGISTRO */}
+      <Modal visible={modalRegistroVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>REGISTRAR <Text style={{ color: COLORS.accent }}>EMPRESA</Text></Text>
+              <TouchableOpacity onPress={() => setModalRegistroVisible(false)}>
+                <Ionicons name="close" size={normalize(24)} color={COLORS.textSec} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.label}>Nombre de la Empresa</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Mi Tienda S.A.S"
+                placeholderTextColor={COLORS.textSec}
+                value={formData.nombre}
+                onChangeText={(t) => setFormData({ ...formData, nombre: t })}
+              />
+
+              <Text style={styles.label}>Correo Electrónico</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="correo@ejemplo.com"
+                placeholderTextColor={COLORS.textSec}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={formData.correo}
+                onChangeText={(t) => setFormData({ ...formData, correo: t })}
+              />
+
+              <Text style={styles.label}>Contraseña Temporal</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="********"
+                placeholderTextColor={COLORS.textSec}
+                secureTextEntry
+                value={formData.password}
+                onChangeText={(t) => setFormData({ ...formData, password: t })}
+              />
+
+              <TouchableOpacity
+                style={styles.btnRegistro}
+                onPress={handleRegistro}
+                disabled={isRegistrando}
+              >
+                {isRegistrando ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={styles.btnRegistroText}>CREAR CUENTA</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -277,7 +411,7 @@ const getResponsiveStyles = (width: number, topInset: number) => {
 
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.background },
-    
+
     // --- HEADER ---
     header: {
       flexDirection: 'row',
@@ -374,6 +508,102 @@ const getResponsiveStyles = (width: number, topInset: number) => {
     statNumberBlue: { fontSize: normalize(18), fontFamily: FONTS.title, color: '#4F9CF9' },
 
     emptyState: { alignItems: 'center', marginTop: normalize(60), opacity: 0.5 },
-    emptyText: { color: COLORS.textSec, marginTop: normalize(15), fontFamily: FONTS.textMedium, fontSize: normalize(14) }
+    emptyText: { color: COLORS.textSec, marginTop: normalize(15), fontFamily: FONTS.textMedium, fontSize: normalize(14) },
+    fab: {
+      position: 'absolute',
+      bottom: normalize(30),
+      right: normalize(30),
+      backgroundColor: COLORS.accent,
+      width: normalize(56),
+      height: normalize(56),
+      borderRadius: normalize(28),
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 8,
+      shadowColor: COLORS.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.8)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: COLORS.background,
+      borderTopLeftRadius: normalize(30),
+      borderTopRightRadius: normalize(30),
+      padding: normalize(24),
+      maxHeight: '90%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: normalize(25),
+    },
+    modalTitle: {
+      fontFamily: FONTS.title,
+      fontSize: normalize(18),
+      color: COLORS.text,
+    },
+    label: {
+      fontFamily: FONTS.textBold,
+      color: COLORS.accent,
+      fontSize: normalize(10),
+      letterSpacing: 1,
+      marginBottom: normalize(8),
+      textTransform: 'uppercase',
+    },
+    input: {
+      backgroundColor: COLORS.cardBg,
+      borderRadius: normalize(12),
+      padding: normalize(14),
+      color: COLORS.text,
+      fontFamily: FONTS.textRegular,
+      marginBottom: normalize(20),
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    },
+    categoryRow: {
+      flexDirection: 'row',
+      gap: normalize(8),
+      marginBottom: normalize(25),
+    },
+    catChip: {
+      flex: 1,
+      paddingVertical: normalize(10),
+      backgroundColor: COLORS.cardBg,
+      borderRadius: normalize(10),
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      alignItems: 'center',
+    },
+    catChipActive: {
+      backgroundColor: COLORS.accent,
+      borderColor: COLORS.accent,
+    },
+    catChipText: {
+      color: COLORS.textSec,
+      fontFamily: FONTS.textMedium,
+      fontSize: normalize(11),
+    },
+    catChipTextActive: {
+      color: '#000',
+      fontFamily: FONTS.textBold,
+    },
+    btnRegistro: {
+      backgroundColor: COLORS.accent,
+      padding: normalize(16),
+      borderRadius: normalize(16),
+      alignItems: 'center',
+      marginBottom: normalize(20),
+    },
+    btnRegistroText: {
+      color: '#000',
+      fontFamily: FONTS.title,
+      fontSize: normalize(14),
+    }
   });
 };
