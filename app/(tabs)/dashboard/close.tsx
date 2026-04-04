@@ -1,4 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { CommonActions } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function Close() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
   const { width } = useWindowDimensions();
 
   // Función simple para escalar la fuente
@@ -21,7 +23,12 @@ export default function Close() {
         SecureStore.deleteItemAsync('nameEmpresa'),
       ]);
 
-      router.replace('/');
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'index' }],
+        })
+      );
     }
 
     CloseSession();

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { CommonActions } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Tabs, useFocusEffect, useRouter } from 'expo-router';
+import { Tabs, useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useState } from 'react';
 import { Alert, Platform, useWindowDimensions } from 'react-native';
@@ -16,6 +17,7 @@ const COLORS = {
 
 export default function TabLayout() {
     const router = useRouter();
+    const navigation = useNavigation();
     const { width, height } = useWindowDimensions();
     const [empresaState, setEmpresaState] = useState(false);
     const [adminState, setAdminState] = useState(false);
@@ -53,7 +55,12 @@ export default function TabLayout() {
                     await SecureStore.deleteItemAsync('empresa_id');
                     await SecureStore.deleteItemAsync('user_id');
                     await SecureStore.deleteItemAsync('rol');
-                    router.replace('/');
+                    navigation.dispatch(
+                        CommonActions.reset({
+                            index: 0,
+                            routes: [{ name: 'index' }],
+                        })
+                    );
                 }
             }
         ]);

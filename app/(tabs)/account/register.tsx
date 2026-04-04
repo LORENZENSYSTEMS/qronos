@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { CommonActions } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { useRouter } from "expo-router";
+import { useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
 import {
     ActivityIndicator,
@@ -22,12 +23,12 @@ import { auth } from '../../../src/firebaseConfig.js';
 
 // PALETA DE COLORES QRONNOS
 const COLORS = {
-    background: '#0f1115', 
-    cardBg: '#181b21',     
-    accent: '#01c38e',     
-    text: '#ffffff',       
-    textSec: '#8b9bb4',    
-    border: '#232936'      
+    background: '#0f1115',
+    cardBg: '#181b21',
+    accent: '#01c38e',
+    text: '#ffffff',
+    textSec: '#8b9bb4',
+    border: '#232936'
 };
 
 // CONSTANTES DE FUENTES
@@ -41,11 +42,12 @@ const FONTS = {
 export default function Register() {
     const safeareaInsets = useSafeAreaInsets();
     const router = useRouter();
+    const navigation = useNavigation();
     const { width } = useWindowDimensions(); // <-- Obtenemos el ancho dinámicamente
 
     const [nombreCompleto, setNombreCompleto] = useState("");
     const [correo, setCorreo] = useState("");
-    const [contrasena, setContrasena] = useState(""); 
+    const [contrasena, setContrasena] = useState("");
     const [aceptoTerminos, setAceptoTerminos] = useState(false);
     const [isRegistering, setIsRegistering] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
@@ -60,7 +62,7 @@ export default function Register() {
 
     const handleOpenTerms = () => {
         const url = 'https://qronnos.co/terminos';
-        Linking.openURL(url).catch((err) => 
+        Linking.openURL(url).catch((err) =>
             Alert.alert("Error", "No se pudo abrir la página web.")
         );
     };
@@ -80,7 +82,7 @@ export default function Register() {
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, correo, contrasena);
             const user = userCredential.user;
-            const firebase_uid = user.uid; 
+            const firebase_uid = user.uid;
 
             await sendEmailVerification(user);
 
@@ -90,8 +92,8 @@ export default function Register() {
                 body: JSON.stringify({
                     nombreCompleto: nombreCompleto,
                     correo: correo,
-                    contrasena: contrasena, 
-                    auth_uid: firebase_uid 
+                    contrasena: contrasena,
+                    auth_uid: firebase_uid
                 })
             });
 
@@ -101,10 +103,15 @@ export default function Register() {
                 Alert.alert("Error de Registro", data.message || "No se pudo crear el perfil.");
             } else {
                 Alert.alert(
-                    "Registro Exitoso", 
+                    "Registro Exitoso",
                     "¡Cuenta creada! Revisa tu correo para verificar tu cuenta antes de iniciar sesión."
                 );
-                router.replace('/'); 
+                navigation.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'index' }],
+                    })
+                );
             }
 
         } catch (error: any) {
@@ -125,12 +132,12 @@ export default function Register() {
     return (
         <View style={styles.fullScreenContainer}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-            
+
             {/* --- CONTENEDOR RESPONSIVO CENTRAL --- */}
-            <View 
+            <View
                 style={[
-                    styles.contentWrapper, 
-                    { 
+                    styles.contentWrapper,
+                    {
                         paddingTop: safeareaInsets.top + 20,
                         paddingHorizontal: isTablet ? 0 : '8%'
                     }
@@ -145,9 +152,9 @@ export default function Register() {
 
                 <View style={styles.containerLogin}>
                     <Text style={styles.welcomeText}>NUEVA EXPERIENCIA</Text>
-                    <Text style={styles.Titulo}>CREAR <Text style={{color: COLORS.accent}}>CUENTA</Text></Text>
+                    <Text style={styles.Titulo}>CREAR <Text style={{ color: COLORS.accent }}>CUENTA</Text></Text>
                     <Text style={styles.Subtitulo}>Únete al ecosistema tecnológico QRONNOS</Text>
-                    
+
                     {/* Nombre Completo */}
                     <View style={styles.inputWrapper}>
                         <Text style={styles.label}>NOMBRE COMPLETO</Text>
@@ -161,7 +168,7 @@ export default function Register() {
                             />
                         </View>
                     </View>
-                    
+
                     {/* Correo */}
                     <View style={styles.inputWrapper}>
                         <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
@@ -177,7 +184,7 @@ export default function Register() {
                             />
                         </View>
                     </View>
-                    
+
                     {/* Contraseña con botón de visualización */}
                     <View style={styles.inputWrapper}>
                         <Text style={styles.label}>CONTRASEÑA</Text>
@@ -191,10 +198,10 @@ export default function Register() {
                                 onChangeText={setContrasena}
                             />
                             <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                                <Ionicons 
-                                    name={showPassword ? "eye-off" : "eye"} 
-                                    size={22} 
-                                    color={COLORS.textSec} 
+                                <Ionicons
+                                    name={showPassword ? "eye-off" : "eye"}
+                                    size={22}
+                                    color={COLORS.textSec}
                                 />
                             </TouchableOpacity>
                         </View>
@@ -202,14 +209,14 @@ export default function Register() {
 
                     {/* BOTÓN TÉRMINOS Y CONDICIONES */}
                     <View style={styles.termsContainer}>
-                        <TouchableOpacity 
-                            style={[styles.checkbox, aceptoTerminos && styles.checkboxChecked]} 
+                        <TouchableOpacity
+                            style={[styles.checkbox, aceptoTerminos && styles.checkboxChecked]}
                             onPress={() => setAceptoTerminos(!aceptoTerminos)}
                             activeOpacity={0.8}
                         >
                             {aceptoTerminos && <Ionicons name="checkmark" size={16} color="#000" />}
                         </TouchableOpacity>
-                        
+
                         <Text style={styles.termsText}>
                             Acepto los{' '}
                             <Text style={styles.linkText} onPress={handleOpenTerms}>
@@ -218,10 +225,10 @@ export default function Register() {
                         </Text>
                     </View>
 
-                    <TouchableOpacity 
-                        onPress={handleRegister} 
+                    <TouchableOpacity
+                        onPress={handleRegister}
                         style={[
-                            styles.button, 
+                            styles.button,
                             (isRegistering || !aceptoTerminos) && { opacity: 0.5, elevation: 0, shadowOpacity: 0 }
                         ]}
                         disabled={isRegistering || !aceptoTerminos}

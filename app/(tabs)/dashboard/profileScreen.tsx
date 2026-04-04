@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { CommonActions } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { router, useFocusEffect, useNavigation } from "expo-router";
+import { useFocusEffect, useNavigation } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { deleteUser } from 'firebase/auth';
 import { useCallback, useState } from "react";
@@ -38,10 +39,11 @@ const FONTS = {
 };
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const navigator: any = useNavigation();
   // Hook dinámico para responsividad (reacciona a rotaciones y tamaños de iPad)
-  const { width } = useWindowDimensions(); 
-  
+  const { width } = useWindowDimensions();
+
   const [nombreClienteState, setNameClienteState] = useState('');
   const [qrData, setQrData] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -151,7 +153,12 @@ export default function ProfileScreen() {
               await SecureStore.deleteItemAsync('nameCliente');
 
               Alert.alert("Cuenta eliminada", "Tu cuenta ha sido eliminada exitosamente.");
-              router.replace('/'); 
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'index' }],
+                })
+              );
 
             } catch (error: any) {
               console.error("Error eliminando cuenta:", error);
@@ -195,7 +202,7 @@ export default function ProfileScreen() {
   const isTablet = width >= 768;
   const qrFrameSize = Math.min(width * 0.45, 200); // El QR crecerá máximo hasta 200px
   const cardResponsiveStyle = {
-    width: width * 0.9, 
+    width: width * 0.9,
     maxWidth: 420 // Evita que en iPads la tarjeta sea obscenamente ancha
   };
 
@@ -245,7 +252,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
           <Text style={styles.deleteAccountButtonText}>Borrar Cuenta</Text>
         </TouchableOpacity>
-        
+
         <Text style={styles.footerNote}>
           Presenta este código en los comercios aliados para recibir tus beneficios.
         </Text>

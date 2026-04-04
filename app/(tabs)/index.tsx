@@ -1,8 +1,9 @@
+import { CommonActions } from '@react-navigation/native';
 import { Camera } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
-import { useRouter } from "expo-router";
+import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { reload, signInWithEmailAndPassword } from 'firebase/auth';
 import { useEffect, useRef, useState } from 'react';
@@ -43,9 +44,10 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const LOGIN_CLIENTE_URL = `${API_URL}/api/cliente/login`;
 
 export default function HomeScreen() {
+    const navigation = useNavigation();
     const safeareaInsets = useSafeAreaInsets();
     const router = useRouter();
-    const { width, height } = useWindowDimensions(); 
+    const { width, height } = useWindowDimensions();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -54,8 +56,8 @@ export default function HomeScreen() {
     // --- ESTADOS DE ANIMACIÓN ---
     const [splashVisible, setSplashVisible] = useState(true);
     const splashOpacity = useRef(new Animated.Value(1)).current;
-    const logoScale = useRef(new Animated.Value(0.8)).current; 
-    const loginOpacity = useRef(new Animated.Value(0)).current; 
+    const logoScale = useRef(new Animated.Value(0.8)).current;
+    const loginOpacity = useRef(new Animated.Value(0)).current;
 
     // CARGA DE FUENTES
     const [fontsLoaded] = useFonts({
@@ -66,43 +68,47 @@ export default function HomeScreen() {
     });
 
     // --- FUNCIONES DE PERMISOS ---
-    const checkCameraPermission = async () => {
-        const cameraStatus = await Camera.getCameraPermissionsAsync();
-        if (cameraStatus.status !== 'granted') {
-            Alert.alert(
-                "Acceso a la Cámara",
-                "Será utilizada solo si inicias sesión con un perfil tipo empresa para que puedas escanear los códigos QR de los clientes que lleguen a tu tienda/empresa.",
-                [
-                    { text: "Ahora no", style: "cancel" },
-                    // CORRECCIÓN: Se cambia "Permitir" por "Continuar"
-                    { text: "Continuar", onPress: async () => {
-                        await Camera.requestCameraPermissionsAsync();
-                    }}
-                ]
-            );
-        }
-    };
+    const checkCameraPermission = async () => {
+        const cameraStatus = await Camera.getCameraPermissionsAsync();
+        if (cameraStatus.status !== 'granted') {
+            Alert.alert(
+                "Acceso a la Cámara",
+                "Será utilizada solo si inicias sesión con un perfil tipo empresa para que puedas escanear los códigos QR de los clientes que lleguen a tu tienda/empresa.",
+                [
+                    { text: "Ahora no", style: "cancel" },
+                    // CORRECCIÓN: Se cambia "Permitir" por "Continuar"
+                    {
+                        text: "Continuar", onPress: async () => {
+                            await Camera.requestCameraPermissionsAsync();
+                        }
+                    }
+                ]
+            );
+        }
+    };
 
-    const requestPermissions = async () => {
-        const galleryStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
-        
-        if (galleryStatus.status !== 'granted') {
-            Alert.alert(
-                "Acceso a la Galería",
-                "Será utilizado si inicias con un perfil tipo empresa para que puedas subir las imágenes de tu tienda/empresa.",
-                [
-                    { text: "Ahora no", style: "cancel", onPress: () => checkCameraPermission() },
-                    // CORRECCIÓN: Se cambia "Permitir" por "Continuar"
-                    { text: "Continuar", onPress: async () => {
-                        await ImagePicker.requestMediaLibraryPermissionsAsync();
-                        checkCameraPermission();
-                    }}
-                ]
-            );
-        } else {
-            checkCameraPermission();
-        }
-    };
+    const requestPermissions = async () => {
+        const galleryStatus = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+        if (galleryStatus.status !== 'granted') {
+            Alert.alert(
+                "Acceso a la Galería",
+                "Será utilizado si inicias con un perfil tipo empresa para que puedas subir las imágenes de tu tienda/empresa.",
+                [
+                    { text: "Ahora no", style: "cancel", onPress: () => checkCameraPermission() },
+                    // CORRECCIÓN: Se cambia "Permitir" por "Continuar"
+                    {
+                        text: "Continuar", onPress: async () => {
+                            await ImagePicker.requestMediaLibraryPermissionsAsync();
+                            checkCameraPermission();
+                        }
+                    }
+                ]
+            );
+        } else {
+            checkCameraPermission();
+        }
+    };
     // --- EFECTO DE ANIMACIÓN DE ENTRADA ---
     useEffect(() => {
         if (fontsLoaded) {
@@ -128,7 +134,7 @@ export default function HomeScreen() {
                         useNativeDriver: true,
                     }),
                     Animated.timing(logoScale, {
-                        toValue: 1.5, 
+                        toValue: 1.5,
                         duration: 800,
                         useNativeDriver: true,
                     }),
@@ -139,7 +145,7 @@ export default function HomeScreen() {
                     })
                 ])
             ]).start(() => {
-                setSplashVisible(false); 
+                setSplashVisible(false);
                 requestPermissions();
             });
         }
@@ -152,7 +158,12 @@ export default function HomeScreen() {
                 const empresaId = await SecureStore.getItemAsync('empresa_id');
 
                 if (userId || empresaId) {
-                    router.replace('/(tabs)/dashboard');
+                    navigation.dispatch(
+                        CommonActions.reset({
+                            index: 0,
+                            routes: [{ name: 'dashboard' }],
+                        })
+                    );
                 }
             } catch (error) {
                 console.error('Error al acceder a SecureStore:', error);
@@ -219,7 +230,12 @@ export default function HomeScreen() {
                     await SecureStore.setItemAsync('nameEmpresa', String(empresa));
                 }
 
-                router.replace('/(tabs)/dashboard');
+                navigation.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'dashboard' }],
+                    })
+                );
 
             } else {
                 Alert.alert("Error", data.message || "Credenciales incorrectas.");
@@ -248,10 +264,10 @@ export default function HomeScreen() {
 
             {/* --- CONTENIDO DEL LOGIN --- */}
             <Animated.View style={[styles.loginContentWrapper, { opacity: loginOpacity }]}>
-                <View 
+                <View
                     style={[
                         styles.containerLogin,
-                        { 
+                        {
                             paddingTop: safeareaInsets.top + height * 0.08,
                             paddingHorizontal: isTablet ? 0 : '8%'
                         }
@@ -289,7 +305,7 @@ export default function HomeScreen() {
                             />
                         </View>
                     </View>
-                    
+
                     <TouchableOpacity onPress={() => router.push('/(tabs)/guest')} style={styles.registerLink}>
                         <Text style={styles.linkAccent}>Ver Como invitado</Text>
                     </TouchableOpacity>
@@ -349,14 +365,14 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     loginContentWrapper: {
-        flex: 1, 
+        flex: 1,
     },
     splashContainer: {
-        ...StyleSheet.absoluteFillObject, 
+        ...StyleSheet.absoluteFillObject,
         backgroundColor: COLORS.background,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 100, 
+        zIndex: 100,
     },
     containerLogin: {
         width: '100%',
