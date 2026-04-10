@@ -15,7 +15,11 @@ import {
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
-  View
+  View,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -345,60 +349,69 @@ export default function AdminDashboardScreen() {
 
       {/* MODAL DE REGISTRO */}
       <Modal visible={modalRegistroVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>REGISTRAR <Text style={{ color: COLORS.accent }}>EMPRESA</Text></Text>
-              <TouchableOpacity onPress={() => setModalRegistroVisible(false)}>
-                <Ionicons name="close" size={normalize(24)} color={COLORS.textSec} />
-              </TouchableOpacity>
-            </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={{ width: '100%' }}
+            >
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>REGISTRAR <Text style={{ color: COLORS.accent }}>EMPRESA</Text></Text>
+                    <TouchableOpacity onPress={() => setModalRegistroVisible(false)}>
+                      <Ionicons name="close" size={normalize(24)} color={COLORS.textSec} />
+                    </TouchableOpacity>
+                  </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.label}>Nombre de la Empresa</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ej: Mi Tienda S.A.S"
-                placeholderTextColor={COLORS.textSec}
-                value={formData.nombre}
-                onChangeText={(t) => setFormData({ ...formData, nombre: t })}
-              />
+                  <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    <Text style={styles.label}>Nombre de la Empresa</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ej: Mi Tienda S.A.S"
+                      placeholderTextColor={COLORS.textSec}
+                      value={formData.nombre}
+                      onChangeText={(t) => setFormData({ ...formData, nombre: t })}
+                    />
 
-              <Text style={styles.label}>Correo Electrónico</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="correo@ejemplo.com"
-                placeholderTextColor={COLORS.textSec}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={formData.correo}
-                onChangeText={(t) => setFormData({ ...formData, correo: t })}
-              />
+                    <Text style={styles.label}>Correo Electrónico</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="correo@ejemplo.com"
+                      placeholderTextColor={COLORS.textSec}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      value={formData.correo}
+                      onChangeText={(t) => setFormData({ ...formData, correo: t })}
+                    />
 
-              <Text style={styles.label}>Contraseña Temporal</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="********"
-                placeholderTextColor={COLORS.textSec}
-                secureTextEntry
-                value={formData.password}
-                onChangeText={(t) => setFormData({ ...formData, password: t })}
-              />
+                    <Text style={styles.label}>Contraseña Temporal</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="********"
+                      placeholderTextColor={COLORS.textSec}
+                      secureTextEntry
+                      value={formData.password}
+                      onChangeText={(t) => setFormData({ ...formData, password: t })}
+                    />
 
-              <TouchableOpacity
-                style={styles.btnRegistro}
-                onPress={handleRegistro}
-                disabled={isRegistrando}
-              >
-                {isRegistrando ? (
-                  <ActivityIndicator color="#000" />
-                ) : (
-                  <Text style={styles.btnRegistroText}>CREAR CUENTA</Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
+                    <TouchableOpacity
+                      style={styles.btnRegistro}
+                      onPress={handleRegistro}
+                      disabled={isRegistrando}
+                    >
+                      {isRegistrando ? (
+                        <ActivityIndicator color="#000" />
+                      ) : (
+                        <Text style={styles.btnRegistroText}>CREAR CUENTA</Text>
+                      )}
+                    </TouchableOpacity>
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );

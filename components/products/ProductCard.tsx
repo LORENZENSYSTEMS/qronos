@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Image, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Image, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 
 const COLORS = {
     cardBg: '#181b21',
@@ -18,19 +18,68 @@ const FONTS = {
 };
 
 interface ProductCardProps {
+    producto_id?: number;
     nombre: string;
     precio: number;
     descripcion?: string;
     imagenUrl?: string | null;
+    onDeleteSuccess?: (id: number) => void;
 }
 
-export default function ProductCard({ nombre, precio, descripcion, imagenUrl }: ProductCardProps) {
+export default function ProductCard({ producto_id, nombre, precio, descripcion, imagenUrl, onDeleteSuccess }: ProductCardProps) {
     const { width } = useWindowDimensions();
     const isSmall = width < 380;
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const getImageSource = (url?: string | null) => {
         if (!url) return { uri: 'https://via.placeholder.com/400x300.png?text=Producto' };
         return { uri: url };
+    };
+
+    const handleDelete = () => {
+        Alert.alert(
+            '¿Eliminar producto?',
+            '¿Estás seguro de que deseas eliminar este producto del catálogo?',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Eliminar',
+                    style: 'destructive',
+                    onPress: async () => {
+                        if (!producto_id) return;
+                        setIsDeleting(true);
+                        try {
+                            const API_URL = process.env.EXPO_PUBLIC_API_URL;
+                            const response = await fetch(`${API_URL}/api/productos/${producto_id}`, {
+                                method: 'DELETE',
+                            });
+                            
+                            if (response.status === 200) {
+                                Alert.alert("Éxito", "Producto eliminado correctamente.");
+                                if (onDeleteSuccess) {
+                                    onDeleteSuccess(producto_id);
+                                }
+                            } else {
+                                let errorMsg = "Error al eliminar el producto.";
+                                try {
+                                    const errorData = await response.json();
+                                    errorMsg = errorData.message || errorData.error || errorMsg;
+                                } catch (e) {
+                                    const textQuote = await response.text();
+                                    if (textQuote) errorMsg = textQuote;
+                                }
+                                Alert.alert("Error", errorMsg);
+                            }
+                        } catch (error) {
+                            Alert.alert("Error", "Error de red al intentar eliminar el producto.");
+                            console.error(error);
+                        } finally {
+                            setIsDeleting(false);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     return (
@@ -41,6 +90,19 @@ export default function ProductCard({ nombre, precio, descripcion, imagenUrl }: 
                     style={styles.image}
                     resizeMode="cover"
                 />
+                {producto_id !== undefined && onDeleteSuccess && (
+                    <TouchableOpacity 
+                        style={styles.deleteButton} 
+                        onPress={handleDelete}
+                        disabled={isDeleting}
+                    >
+                        {isDeleting ? (
+                            <ActivityIndicator size="small" color="#ff4444" />
+                        ) : (
+                            <Ionicons name="trash" size={20} color="#ff4444" />
+                        )}
+                    </TouchableOpacity>
+                )}
             </View>
             <View style={styles.info}>
                 <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
@@ -79,6 +141,17 @@ const styles = StyleSheet.create({
     image: {
         width: '100%',
         height: '100%',
+    },
+    deleteButton: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     info: {
         padding: 12,

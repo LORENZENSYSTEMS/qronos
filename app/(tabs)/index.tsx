@@ -17,7 +17,12 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    useWindowDimensions
+    useWindowDimensions,
+    KeyboardAvoidingView,
+    Platform,
+    TouchableWithoutFeedback,
+    Keyboard,
+    ScrollView
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from '../../src/firebaseConfig';
@@ -259,103 +264,112 @@ export default function HomeScreen() {
     const isTablet = width > 500;
 
     return (
-        <View style={styles.fullContainer}>
-            <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+        <KeyboardAvoidingView
+            style={styles.fullContainer}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.fullContainer}>
+                    <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-            {/* --- CONTENIDO DEL LOGIN --- */}
-            <Animated.View style={[styles.loginContentWrapper, { opacity: loginOpacity }]}>
-                <View
-                    style={[
-                        styles.containerLogin,
-                        {
-                            paddingTop: safeareaInsets.top + height * 0.08,
-                            paddingHorizontal: isTablet ? 0 : '8%'
-                        }
-                    ]}
-                >
-                    <Text style={styles.welcomeText}>BIENVENIDO A</Text>
-                    <Text style={styles.Titulo}>INICIAR <Text style={{ color: COLORS.accent }}>SESIÓN</Text></Text>
-                    <Text style={styles.Subtitulo}>Accede a tu ecosistema de beneficios</Text>
+                    {/* --- CONTENIDO DEL LOGIN --- */}
+                    <Animated.View style={[styles.loginContentWrapper, { opacity: loginOpacity }]}>
+                        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+                            <View
+                                style={[
+                                    styles.containerLogin,
+                                    {
+                                        paddingTop: safeareaInsets.top + height * 0.08,
+                                        paddingHorizontal: isTablet ? 0 : '8%',
+                                        paddingBottom: height * 0.1
+                                    }
+                                ]}
+                            >
+                                <Text style={styles.welcomeText}>BIENVENIDO A</Text>
+                                <Text style={styles.Titulo}>INICIAR <Text style={{ color: COLORS.accent }}>SESIÓN</Text></Text>
+                                <Text style={styles.Subtitulo}>Accede a tu ecosistema de beneficios</Text>
 
-                    <View style={styles.inputWrapper}>
-                        <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
-                        <View style={styles.inputShadowContainer}>
-                            <TextInput
-                                placeholder="ejemplo@qronnos.com"
-                                placeholderTextColor="rgba(255,255,255,0.2)"
-                                style={styles.TextInput}
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
+                                <View style={styles.inputWrapper}>
+                                    <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
+                                    <View style={styles.inputShadowContainer}>
+                                        <TextInput
+                                            placeholder="ejemplo@qronnos.com"
+                                            placeholderTextColor="rgba(255,255,255,0.2)"
+                                            style={styles.TextInput}
+                                            value={email}
+                                            onChangeText={setEmail}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={styles.inputWrapper}>
+                                    <Text style={styles.label}>CONTRASEÑA</Text>
+                                    <View style={styles.inputShadowContainer}>
+                                        <TextInput
+                                            placeholder="********"
+                                            placeholderTextColor="rgba(255,255,255,0.2)"
+                                            style={styles.TextInput}
+                                            value={password}
+                                            onChangeText={setPassword}
+                                            secureTextEntry={true}
+                                        />
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity onPress={() => router.push('/(tabs)/guest')} style={styles.registerLink}>
+                                    <Text style={styles.linkAccent}>Ver Como invitado</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => router.push('/(tabs)/account/register')} style={styles.registerLink}>
+                                    <Text style={styles.textRegister}>
+                                        ¿No tienes cuenta? <Text style={styles.linkAccent}>Regístrate aquí</Text>
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => router.push('/(tabs)/account/forgotpassword')} style={styles.registerLink}>
+                                    <Text style={styles.textRegister}>
+                                        <Text style={styles.linkAccent}>¿Olvidaste tu contraseña?</Text>
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={handleLogin}
+                                    style={[styles.button, isLoggingIn && { opacity: 0.7 }]}
+                                    disabled={isLoggingIn}
+                                >
+                                    {isLoggingIn ? (
+                                        <ActivityIndicator color="#000" />
+                                    ) : (
+                                        <Text style={styles.textButton}>INGRESAR</Text>
+                                    )}
+                                </TouchableOpacity>
+
+                            </View>
+                        </ScrollView>
+                    </Animated.View>
+
+                    {/* --- CAPA DE ANIMACIÓN SPLASH --- */}
+                    {splashVisible && (
+                        <Animated.View
+                            pointerEvents="none"
+                            style={[
+                                styles.splashContainer,
+                                { opacity: splashOpacity }
+                            ]}
+                        >
+                            <Animated.Image
+                                source={require('../../assets/images/animacionInicio.png')}
+                                style={[
+                                    { width: width * 0.6, height: width * 0.6 },
+                                    { transform: [{ scale: logoScale }] }
+                                ]}
+                                resizeMode="contain"
                             />
-                        </View>
-                    </View>
-
-                    <View style={styles.inputWrapper}>
-                        <Text style={styles.label}>CONTRASEÑA</Text>
-                        <View style={styles.inputShadowContainer}>
-                            <TextInput
-                                placeholder="********"
-                                placeholderTextColor="rgba(255,255,255,0.2)"
-                                style={styles.TextInput}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={true}
-                            />
-                        </View>
-                    </View>
-
-                    <TouchableOpacity onPress={() => router.push('/(tabs)/guest')} style={styles.registerLink}>
-                        <Text style={styles.linkAccent}>Ver Como invitado</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => router.push('/(tabs)/account/register')} style={styles.registerLink}>
-                        <Text style={styles.textRegister}>
-                            ¿No tienes cuenta? <Text style={styles.linkAccent}>Regístrate aquí</Text>
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => router.push('/(tabs)/account/forgotpassword')} style={styles.registerLink}>
-                        <Text style={styles.textRegister}>
-                            <Text style={styles.linkAccent}>¿Olvidaste tu contraseña?</Text>
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        onPress={handleLogin}
-                        style={[styles.button, isLoggingIn && { opacity: 0.7 }]}
-                        disabled={isLoggingIn}
-                    >
-                        {isLoggingIn ? (
-                            <ActivityIndicator color="#000" />
-                        ) : (
-                            <Text style={styles.textButton}>INGRESAR</Text>
-                        )}
-                    </TouchableOpacity>
-
+                        </Animated.View>
+                    )}
                 </View>
-
-            </Animated.View>
-
-            {/* --- CAPA DE ANIMACIÓN SPLASH --- */}
-            {splashVisible && (
-                <Animated.View
-                    pointerEvents="none"
-                    style={[
-                        styles.splashContainer,
-                        { opacity: splashOpacity }
-                    ]}
-                >
-                    <Animated.Image
-                        source={require('../../assets/images/animacionInicio.png')}
-                        style={[
-                            { width: width * 0.6, height: width * 0.6 },
-                            { transform: [{ scale: logoScale }] }
-                        ]}
-                        resizeMode="contain"
-                    />
-                </Animated.View>
-            )}
-        </View>
+            </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
     );
 }
 

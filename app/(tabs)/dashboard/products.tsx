@@ -122,10 +122,14 @@ export default function ProductsScreen() {
                     renderItem={({ item }) => (
                         <View style={isTablet ? { width: '48%' } : { width: '100%' }}>
                             <ProductCard
+                                producto_id={item.producto_id}
                                 nombre={item.nombre}
                                 precio={item.precio}
                                 descripcion={item.descripcion}
                                 imagenUrl={item.imagenUrl}
+                                onDeleteSuccess={(id) => {
+                                    setProductos(prev => prev.filter(p => p.producto_id !== id));
+                                }}
                             />
                         </View>
                     )}
