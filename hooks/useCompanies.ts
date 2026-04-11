@@ -12,6 +12,7 @@ export interface Lugar {
     ciudad: string;
     descuentos?: string | null;
     mapLink?: string | null;
+    whatsapp?: string | null; // ✅ 1. Añadido a la interfaz
     img1?: string | null;
     img2?: string | null;
     img3?: string | null;
@@ -48,6 +49,7 @@ const fetchCompanies = async (): Promise<Lugar[]> => {
         ciudad: item.ciudad,
         descuentos: item.descuento,
         mapLink: item.ubicacionMaps,
+        whatsapp: item.whatsapp, // ✅ 2. AHORA SÍ PASAMOS EL WHATSAPP AL DASHBOARD
         img1: item.fotoDescripcion1,
         img2: item.fotoDescripcion2,
         img3: item.fotoDescripcion3,
@@ -55,12 +57,13 @@ const fetchCompanies = async (): Promise<Lugar[]> => {
 };
 
 export function useCompanies() {
-    const ONE_DAY_MS = 1000 * 60 * 60 * 24;
+    // Bajamos el staleTime a 5 minutos para que los cambios se vean rápido durante el desarrollo
+    const REFRESH_TIME = 1000 * 60 * 5; 
 
     return useQuery({
         queryKey: ['companies'],
         queryFn: fetchCompanies,
-        staleTime: ONE_DAY_MS,
-        gcTime: ONE_DAY_MS,
+        staleTime: REFRESH_TIME,
+        gcTime: REFRESH_TIME,
     });
 }

@@ -22,7 +22,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Se eliminó la importación estática de Dimensions
+// --- IMPORTANTE: Asegúrate de que la ruta a ProductCard sea correcta ---
+import ProductCard from '../../../components/products/ProductCard';
+import { useCompanies } from '../../../hooks/useCompanies';
+import { useFavorites } from '../../../hooks/useFavorites';
 
 // --- PALETA DE COLORES (PREMIUM) ---
 const COLORS = {
@@ -35,6 +38,7 @@ const COLORS = {
   border: '#1f2229',
   overlay: 'rgba(0,0,0,0.6)',
   gold: '#D4AF37',
+  whatsapp: '#25D366', 
 };
 
 const FONTS = {
@@ -65,15 +69,24 @@ interface Lugar {
   ciudad: string;
   descuentos?: string | null;
   mapLink?: string | null;
+  whatsapp?: string | null; 
   img1?: string | null;
   img2?: string | null;
   img3?: string | null;
 }
 
-import { useCompanies } from '../../../hooks/useCompanies';
-import { useFavorites } from '../../../hooks/useFavorites';
-
-const CompanyProducts = ({ empresaId }: { empresaId: number }) => {
+// --- COMPONENTE DE PRODUCTOS ---
+const CompanyProducts = ({ 
+  empresaId, 
+  cart, 
+  onCartUpdate,
+  onImagePress
+}: { 
+  empresaId: number, 
+  cart: Record<number, any>, 
+  onCartUpdate: (productId: number, product: any, delta: number) => void,
+  onImagePress: (url: string) => void
+}) => {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -103,17 +116,16 @@ const CompanyProducts = ({ empresaId }: { empresaId: number }) => {
       <Text style={styles.sectionTitle}>PRODUCTOS DISPONIBLES</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
         {products.map((item) => (
-          <View key={item.producto_id} style={styles.productMiniCard}>
-            <Image
-              source={{ uri: item.imagenUrl || 'https://via.placeholder.com/150' }}
-              style={styles.productImage}
-              resizeMode="cover"
-            />
-            <View style={styles.productInfo}>
-              <Text style={styles.productName} numberOfLines={1}>{item.nombre}</Text>
-              <Text style={styles.productPrice}>${Number(item.precio).toLocaleString()}</Text>
-            </View>
-          </View>
+          <ProductCard 
+            key={item.producto_id}
+            nombre={item.nombre}
+            precio={item.precio}
+            imagenUrl={item.imagenUrl}
+            cantidad={cart[item.producto_id]?.cantidad || 0}
+            onAdd={() => onCartUpdate(item.producto_id, item, 1)}
+            onRemove={() => onCartUpdate(item.producto_id, item, -1)}
+            onImagePress={() => item.imagenUrl ? onImagePress(item.imagenUrl) : null}
+          />
         ))}
       </ScrollView>
     </View>
@@ -125,7 +137,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
 
-  // Hooks dinámicos para responsividad
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
@@ -135,6 +146,10 @@ export default function HomeScreen() {
   const lugares = stores || [];
   const loading = loadingStores;
   const refreshing = isFetching;
+
+  // --- ESTADOS ---
+  const [cart, setCart] = useState<Record<number, any>>({});
+  const [viewerImage, setViewerImage] = useState<string | null>(null); // Estado de la imagen ampliada
 
   const [fontsLoaded] = useFonts({
     'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
@@ -161,10 +176,6 @@ export default function HomeScreen() {
       checkRole();
     }, [])
   );
-
-  const fetchLugares = async () => {
-    // Logic moved to useCompanies hook
-  };
 
   const onRefresh = () => {
     refetchStores();
@@ -194,9 +205,66 @@ export default function HomeScreen() {
       Alert.alert("Aviso", "Esta empresa no ha registrado su ubicación.");
       return;
     }
-    const supported = await Linking.canOpenURL(mapLink);
-    if (supported) await Linking.openURL(mapLink);
-    else await Linking.openURL(mapLink);
+    await Linking.openURL(mapLink);
+  };
+
+  const handleCartUpdate = (productId: number, product: any, delta: number) => {
+    setCart(prev => {
+      const currentQty = prev[productId]?.cantidad || 0;
+      const newQty = Math.max(0, currentQty + delta);
+      
+      if (newQty === 0) {
+        const { [productId]: _, ...rest } = prev;
+        return rest;
+      }
+      return {
+        ...prev,
+        [productId]: { ...product, cantidad: newQty }
+      };
+    });
+  };
+
+  const sendOrderWhatsApp = async (lugar: any) => {
+    const cartArray = Object.values(cart);
+    
+    if (cartArray.length === 0) {
+      if (!lugar.whatsapp) {
+        Alert.alert("Aviso", "Esta empresa no ha registrado un número de contacto.");
+        return;
+      }
+      const cleanPhone = lugar.whatsapp.replace(/[^\d]/g, '');
+      Linking.openURL(`https://wa.me/${cleanPhone}`);
+      return;
+    }
+
+    const subtotal = cartArray.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+    const descMatch = lugar.descuentos?.match(/\d+/);
+    const descPercent = descMatch ? parseInt(descMatch[0]) : 0;
+    const descuentoTotal = subtotal * (descPercent / 100);
+    const total = subtotal - descuentoTotal;
+    const orderId = Math.floor(10000 + Math.random() * 90000);
+
+    let mensaje = `*ORDEN DESDE QRONNOS*\n`;
+    mensaje += `(ID: #${orderId})\n\n`;
+    mensaje += `*PRODUCTOS:*\n`;
+    
+    cartArray.forEach(item => {
+      mensaje += `• (${item.cantidad}) ${item.nombre} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
+    });
+
+    mensaje += `\n*RESUMEN DE CUENTA:*\n`;
+    mensaje += `• Subtotal: $${subtotal.toLocaleString()}\n`;
+    if (descPercent > 0) {
+      mensaje += `• Desc. Qronnos (${descPercent}%): -$${descuentoTotal.toLocaleString()}\n`;
+    }
+    mensaje += `\n✅ *TOTAL A PAGAR: $${total.toLocaleString()}*`;
+
+    const cleanPhone = lugar.whatsapp?.replace(/[^\d]/g, '');
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(mensaje)}`;
+    
+    const supported = await Linking.canOpenURL(url);
+    if (supported) await Linking.openURL(url);
+    else Alert.alert("Error", "No se pudo abrir WhatsApp.");
   };
 
   const getImageSource = (img: string | null | undefined) => {
@@ -212,15 +280,12 @@ export default function HomeScreen() {
     );
   }
 
-  // Cálculos dinámicos de estilo
-  const numColumns = isTablet ? 2 : 1;
-  const contentWidth = isTablet ? Math.min(width * 0.9, 1000) : width; // Centrado en tablets grandes
+  const contentWidth = isTablet ? Math.min(width * 0.9, 1000) : width;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-      {/* HEADER PRINCIPAL */}
       <View style={[styles.header, { paddingTop: Math.max(safeAreaInsets.top, 10) }]}>
         <View style={styles.headerTopRow}>
           <View style={{ alignItems: 'center', flex: 1 }}>
@@ -258,7 +323,6 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* MENUS DESPLEGABLES */}
       {isCountryMenuOpen && (
         <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 80, maxWidth: contentWidth }]}>
           <Text style={styles.dropdownHeaderLabel}>Selecciona país</Text>
@@ -302,7 +366,6 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />
         }
       >
-        {/* TABS DE CATEGORIAS */}
         <View style={styles.categoriesContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
             {CATEGORIES.map((cat) => (
@@ -319,7 +382,6 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* LISTA DE ALIADOS */}
         <View style={styles.listContainer}>
           <Text style={styles.resultsText}>
             {filteredLugares.length} {filteredLugares.length === 1 ? 'Lugar exclusivo' : 'Lugares exclusivos'} encontrados
@@ -332,11 +394,10 @@ export default function HomeScreen() {
               return (
                 <TouchableOpacity
                   key={lugar.id}
-                  onPress={() => { setSelectedLugar(lugar); setModalVisible(true); }}
+                  onPress={() => { setSelectedLugar(lugar); setModalVisible(true); setCart({}); setViewerImage(null); }}
                   activeOpacity={0.9}
                   style={[styles.premiumCard, isTablet && styles.tabletCardItem]}
                 >
-                  {/* HEADER DE LA CARD (ATMÓSFERA) */}
                   <View style={styles.cardHeaderWrapper}>
                     <Image
                       source={bgImage}
@@ -361,7 +422,6 @@ export default function HomeScreen() {
                     </View>
                   </View>
 
-                  {/* CONTENIDO SUPERPUESTO */}
                   <View style={styles.cardBody}>
                     <View style={styles.logoMedallion}>
                       <Image
@@ -390,7 +450,6 @@ export default function HomeScreen() {
                     </View>
                   </View>
 
-                  {/* BOTÓN DE FAVORITOS */}
                   <TouchableOpacity
                     style={styles.favoriteBtn}
                     onPress={(e) => {
@@ -418,19 +477,28 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* MODAL DETALLE */}
+      {/* --- MODAL DETALLE --- */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalContainer}>
           <TouchableOpacity style={styles.modalBackdrop} onPress={() => setModalVisible(false)} />
 
           <View style={[styles.modalCard, isTablet && styles.modalCardTablet]}>
             <View style={styles.modalHeaderImageContainer}>
-              <Image
-                source={selectedLugar?.img1 ? { uri: selectedLugar.img1 } : getImageSource(selectedLugar?.imagen)}
-                style={styles.modalHeroImage}
-                resizeMode="cover"
-                blurRadius={selectedLugar?.img1 ? 0 : 20}
-              />
+              <TouchableOpacity 
+                activeOpacity={0.9}
+                style={{ flex: 1 }}
+                onPress={() => {
+                  const heroImg = selectedLugar?.img1 || selectedLugar?.imagen;
+                  if(heroImg) setViewerImage(heroImg);
+                }}
+              >
+                <Image
+                  source={selectedLugar?.img1 ? { uri: selectedLugar.img1 } : getImageSource(selectedLugar?.imagen)}
+                  style={styles.modalHeroImage}
+                  resizeMode="cover"
+                  blurRadius={selectedLugar?.img1 ? 0 : 20}
+                />
+              </TouchableOpacity>
               <View style={styles.modalGradient} />
 
               <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
@@ -469,29 +537,75 @@ export default function HomeScreen() {
               <Text style={styles.sectionTitle}>SOBRE EL LUGAR</Text>
               <Text style={styles.modalDesc}>{selectedLugar?.descripcion}</Text>
 
+              {/* GALERÍA DE IMÁGENES CLICKABLES */}
               {(selectedLugar?.img1 || selectedLugar?.img2 || selectedLugar?.img3) && (
                 <View style={{ marginVertical: 10 }}>
                   <Text style={styles.sectionTitle}>GALERÍA</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {[selectedLugar.img1, selectedLugar.img2, selectedLugar.img3].map((img, idx) => (
-                      img ? <Image key={idx} source={{ uri: img }} style={styles.galleryImg} /> : null
+                      img ? (
+                        <TouchableOpacity key={idx} onPress={() => setViewerImage(img)} activeOpacity={0.8}>
+                          <Image source={{ uri: img }} style={styles.galleryImg} />
+                        </TouchableOpacity>
+                      ) : null
                     ))}
                   </ScrollView>
                 </View>
               )}
 
-              {selectedLugar && <CompanyProducts empresaId={selectedLugar.id} />}
+              {/* LISTA DE PRODUCTOS CON CONEXIÓN AL VISOR */}
+              {selectedLugar && (
+                <CompanyProducts 
+                  empresaId={selectedLugar.id} 
+                  cart={cart}
+                  onCartUpdate={handleCartUpdate}
+                  onImagePress={(url) => setViewerImage(url)} 
+                />
+              )}
 
-              <TouchableOpacity
-                onPress={() => handleOpenMaps(selectedLugar?.mapLink)}
-                style={styles.mainActionBtn}
-              >
-                <Text style={styles.mainActionBtnText}>Cómo llegar</Text>
-                <Ionicons name="map" size={20} color={COLORS.background} />
-              </TouchableOpacity>
+              <View style={styles.modalActionContainer}>
+                <TouchableOpacity
+                  onPress={() => handleOpenMaps(selectedLugar?.mapLink)}
+                  style={styles.mainActionBtn}
+                >
+                  <Text style={styles.mainActionBtnText}>Cómo llegar</Text>
+                  <Ionicons name="map" size={18} color={COLORS.background} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => sendOrderWhatsApp(selectedLugar)}
+                  style={[
+                    styles.whatsappActionBtn,
+                    Object.keys(cart).length > 0 && { width: 140, flexDirection: 'row', gap: 8 }
+                  ]}
+                >
+                  <Ionicons name="logo-whatsapp" size={24} color="#fff" />
+                  {Object.keys(cart).length > 0 && (
+                    <Text style={{ color: '#fff', fontFamily: FONTS.textBold, fontSize: 13 }}>PEDIR AHORA</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
 
               <View style={{ height: 40 }} />
             </ScrollView>
+
+            {/* --- VISOR DE IMAGEN (Overlay Absoluto DENTRO del Modal Principal) --- */}
+            {viewerImage && (
+              <View style={styles.fullScreenOverlay}>
+                <TouchableOpacity
+                  style={[styles.closeOverlayBtn, { top: Math.max(safeAreaInsets.top, 20) + 10 }]}
+                  onPress={() => setViewerImage(null)}
+                >
+                  <Ionicons name="close" size={36} color="#FFF" />
+                </TouchableOpacity>
+                <Image
+                  source={{ uri: viewerImage }}
+                  style={{ width: '100%', height: '80%' }}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+
           </View>
         </View>
       </Modal>
@@ -576,10 +690,10 @@ const styles = StyleSheet.create({
   emptyText: { color: COLORS.textSec, marginTop: 10, fontFamily: FONTS.textRegular },
 
   // --- MODAL PREMIUM ---
-  modalContainer: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' }, // Centrado horizontal
+  modalContainer: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)' },
   modalCard: { height: '92%', width: '100%', backgroundColor: COLORS.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
-  modalCardTablet: { maxWidth: 600, height: '85%', borderRadius: 30, marginBottom: '5%' }, // Estilo específico para Tablets
+  modalCardTablet: { maxWidth: 600, height: '85%', borderRadius: 30, marginBottom: '5%' },
   modalHeaderImageContainer: { height: 250, width: '100%', position: 'relative' },
   modalHeroImage: { width: '100%', height: '100%' },
   modalGradient: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
@@ -602,41 +716,54 @@ const styles = StyleSheet.create({
   modalDesc: { fontSize: 15, color: '#ccc', lineHeight: 24, fontFamily: FONTS.textRegular, marginBottom: 30 },
   galleryImg: { width: 140, height: 90, borderRadius: 12, marginRight: 10, backgroundColor: '#222' },
 
-  mainActionBtn: { backgroundColor: COLORS.accent, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 18, marginBottom: 20, shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, elevation: 8 },
-  mainActionBtnText: { color: COLORS.background, fontFamily: FONTS.textBold, fontSize: 16, marginRight: 8 },
-
-  // PRODUCT MINI CARD
-  productMiniCard: {
-    width: 140,
-    backgroundColor: COLORS.cardBg,
+  // ACCIONES DEL MODAL
+  modalActionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  mainActionBtn: {
+    flex: 1,
+    backgroundColor: COLORS.accent,
     borderRadius: 16,
-    marginRight: 15,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 18,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    elevation: 8
   },
-  productImage: {
-    width: '100%',
-    height: 90,
-    backgroundColor: '#1a1d24',
+  whatsappActionBtn: {
+    width: 60,
+    height: 60,
+    backgroundColor: COLORS.whatsapp,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.whatsapp,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    elevation: 8
   },
-  productInfo: {
+  mainActionBtnText: { color: COLORS.background, fontFamily: FONTS.textBold, fontSize: 15, marginRight: 8 },
+
+  // VISOR DE IMÁGENES DENTRO DEL MODAL
+  fullScreenOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+    zIndex: 9999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeOverlayBtn: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 10000,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     padding: 10,
-  },
-  productName: {
-    color: COLORS.text,
-    fontFamily: FONTS.textBold,
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  productPrice: {
-    color: COLORS.accent,
-    fontFamily: FONTS.textMedium,
-    fontSize: 13,
+    borderRadius: 30,
   }
 });

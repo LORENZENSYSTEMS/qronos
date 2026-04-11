@@ -44,6 +44,7 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
     const [precio, setPrecio] = useState('');
     const [descripcion, setDescripcion] = useState('');
     const [imagen, setImagen] = useState<string | null>(null);
+    const [imagenAsset, setImagenAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
     const pickImage = async () => {
@@ -62,11 +63,12 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
 
         if (!result.canceled) {
             setImagen(result.assets[0].uri);
+            setImagenAsset(result.assets[0]);
         }
     };
 
     const handleSave = async () => {
-        if (!nombre || !precio || !imagen) {
+        if (!nombre || !precio || !imagen || !imagenAsset) {
             Alert.alert("Campos incompletos", "Por favor completa el nombre, precio y selecciona una imagen.");
             return;
         }
@@ -81,12 +83,15 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
             data.append('empresa_id', empresaId);
             data.append('descripcion', descripcion);
 
-            const filename = imagen.split('/').pop();
-            const match = /\.(\w+)$/.exec(filename || '');
-            const type = match ? `image/${match[1]}` : `image`;
+            // Se usa el asset para obtener nombre y tipo real, evitando el error de validación en el backend
+            const fileToUpload = {
+                uri: imagenAsset.uri,
+                name: imagenAsset.fileName || `prod_${Date.now()}.jpg`,
+                type: imagenAsset.mimeType || 'image/jpeg',
+            };
 
             // @ts-ignore
-            data.append('imagen', { uri: imagen, name: filename, type });
+            data.append('imagen', fileToUpload);
 
             const response = await fetch(`${API_URL}/api/productos`, {
                 method: 'POST',
@@ -117,6 +122,7 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
         setPrecio('');
         setDescripcion('');
         setImagen(null);
+        setImagenAsset(null);
     };
 
     return (

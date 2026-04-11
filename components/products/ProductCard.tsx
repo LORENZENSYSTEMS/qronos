@@ -23,12 +23,26 @@ interface ProductCardProps {
     precio: number;
     descripcion?: string;
     imagenUrl?: string | null;
-    onDeleteSuccess?: (id: number) => void;
+    onDeleteSuccess?: (id: number) => void; // Para modo Admin
+    cantidad?: number;                     // Para modo Cliente/Carrito
+    onAdd?: () => void;                    // Para modo Cliente/Carrito
+    onRemove?: () => void;                 // Para modo Cliente/Carrito
+    onImagePress?: (url: string) => void;  // NUEVO: Para abrir la imagen en grande
 }
 
-export default function ProductCard({ producto_id, nombre, precio, descripcion, imagenUrl, onDeleteSuccess }: ProductCardProps) {
+export default function ProductCard({ 
+    producto_id, 
+    nombre, 
+    precio, 
+    descripcion, 
+    imagenUrl, 
+    onDeleteSuccess,
+    cantidad = 0,
+    onAdd,
+    onRemove,
+    onImagePress 
+}: ProductCardProps) {
     const { width } = useWindowDimensions();
-    const isSmall = width < 380;
     const [isDeleting, setIsDeleting] = useState(false);
 
     const getImageSource = (url?: string | null) => {
@@ -56,23 +70,12 @@ export default function ProductCard({ producto_id, nombre, precio, descripcion, 
                             
                             if (response.status === 200) {
                                 Alert.alert("Éxito", "Producto eliminado correctamente.");
-                                if (onDeleteSuccess) {
-                                    onDeleteSuccess(producto_id);
-                                }
+                                if (onDeleteSuccess) onDeleteSuccess(producto_id);
                             } else {
-                                let errorMsg = "Error al eliminar el producto.";
-                                try {
-                                    const errorData = await response.json();
-                                    errorMsg = errorData.message || errorData.error || errorMsg;
-                                } catch (e) {
-                                    const textQuote = await response.text();
-                                    if (textQuote) errorMsg = textQuote;
-                                }
-                                Alert.alert("Error", errorMsg);
+                                Alert.alert("Error", "No se pudo eliminar el producto.");
                             }
                         } catch (error) {
-                            Alert.alert("Error", "Error de red al intentar eliminar el producto.");
-                            console.error(error);
+                            Alert.alert("Error", "Error de red.");
                         } finally {
                             setIsDeleting(false);
                         }
@@ -83,13 +86,27 @@ export default function ProductCard({ producto_id, nombre, precio, descripcion, 
     };
 
     return (
-        <View style={styles.card}>
-            <View style={styles.imageContainer}>
+        <View style={[styles.card, cantidad > 0 && { borderColor: COLORS.accent }]}>
+            {/* NUEVO: TouchableOpacity rodeando la imagen para detectar el clic */}
+            <TouchableOpacity 
+                activeOpacity={onImagePress ? 0.8 : 1}
+                onPress={() => onImagePress && imagenUrl && onImagePress(imagenUrl)}
+                style={styles.imageContainer}
+            >
                 <Image
                     source={getImageSource(imagenUrl)}
                     style={styles.image}
                     resizeMode="cover"
                 />
+                
+                {/* Badge de cantidad seleccionada */}
+                {cantidad > 0 && (
+                    <View style={styles.quantityBadge}>
+                        <Text style={styles.quantityText}>{cantidad}</Text>
+                    </View>
+                )}
+
+                {/* Botón de eliminar (Solo si se pasa onDeleteSuccess - Modo Admin) */}
                 {producto_id !== undefined && onDeleteSuccess && (
                     <TouchableOpacity 
                         style={styles.deleteButton} 
@@ -99,19 +116,39 @@ export default function ProductCard({ producto_id, nombre, precio, descripcion, 
                         {isDeleting ? (
                             <ActivityIndicator size="small" color="#ff4444" />
                         ) : (
-                            <Ionicons name="trash" size={20} color="#ff4444" />
+                            <Ionicons name="trash" size={18} color="#ff4444" />
                         )}
                     </TouchableOpacity>
                 )}
-            </View>
+            </TouchableOpacity>
+
             <View style={styles.info}>
                 <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
                 {descripcion ? (
-                    <Text style={styles.descripcion} numberOfLines={2}>{descripcion}</Text>
+                    <Text style={styles.descripcion} numberOfLines={1}>{descripcion}</Text>
                 ) : null}
+                
                 <View style={styles.footer}>
-                    <Text style={styles.precio}>${precio.toFixed(2)}</Text>
-                    <Ionicons name="cart-outline" size={16} color={COLORS.accent} />
+                    <Text style={styles.precio}>${Number(precio).toLocaleString()}</Text>
+                    
+                    {/* Controles de Carrito (Solo si se pasan onAdd/onRemove - Modo Cliente) */}
+                    {onAdd && onRemove ? (
+                        <View style={styles.cartControls}>
+                            <TouchableOpacity onPress={onRemove} style={styles.controlBtn}>
+                                <Ionicons name="remove-circle-outline" size={24} color={cantidad > 0 ? COLORS.accent : COLORS.border} />
+                            </TouchableOpacity>
+                            
+                            <Text style={[styles.qtyText, { color: cantidad > 0 ? COLORS.text : COLORS.textSec }]}>
+                                {cantidad}
+                            </Text>
+
+                            <TouchableOpacity onPress={onAdd} style={styles.controlBtn}>
+                                <Ionicons name="add-circle" size={24} color={COLORS.accent} />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <Ionicons name="cart-outline" size={18} color={COLORS.textSec} />
+                    )}
                 </View>
             </View>
         </View>
@@ -126,7 +163,8 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.border,
         overflow: 'hidden',
-        width: '100%',
+        width: 160, // Ancho fijo para el scroll horizontal del Dashboard
+        marginRight: 12,
         elevation: 5,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
@@ -134,7 +172,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
     },
     imageContainer: {
-        height: 120,
+        height: 110,
         width: '100%',
         backgroundColor: '#13151a',
     },
@@ -142,14 +180,28 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
+    quantityBadge: {
+        position: 'absolute',
+        top: 8,
+        left: 8,
+        backgroundColor: COLORS.accent,
+        borderRadius: 8,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+    },
+    quantityText: {
+        color: '#000',
+        fontFamily: FONTS.textBold,
+        fontSize: 11,
+    },
     deleteButton: {
         position: 'absolute',
         top: 8,
         right: 8,
         backgroundColor: 'rgba(0,0,0,0.6)',
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -158,27 +210,39 @@ const styles = StyleSheet.create({
     },
     nombre: {
         color: COLORS.text,
-        fontFamily: FONTS.title,
-        fontSize: 14,
-        letterSpacing: 0.5,
-        marginBottom: 4,
+        fontFamily: FONTS.textBold,
+        fontSize: 13,
+        marginBottom: 2,
     },
     descripcion: {
         color: COLORS.textSec,
         fontFamily: FONTS.textRegular,
-        fontSize: 11,
-        lineHeight: 16,
+        fontSize: 10,
         marginBottom: 8,
     },
     footer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 4,
     },
     precio: {
         color: COLORS.accent,
         fontFamily: FONTS.textBold,
-        fontSize: 15,
+        fontSize: 14,
+    },
+    cartControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        borderRadius: 20,
+        paddingHorizontal: 4,
+    },
+    controlBtn: {
+        padding: 2,
+    },
+    qtyText: {
+        fontFamily: FONTS.textBold,
+        fontSize: 13,
+        marginHorizontal: 8,
     }
 });

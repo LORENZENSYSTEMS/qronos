@@ -6,7 +6,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -14,12 +17,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
-  View,
-  KeyboardAvoidingView,
-  Platform,
   TouchableWithoutFeedback,
-  Keyboard
+  useWindowDimensions,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,7 +32,9 @@ const COLORS = {
   accent: '#01c38e',
   text: '#ffffff',
   textSec: '#8b9bb4',
-  border: '#232936'
+  border: '#232936',
+  gold: '#D4AF37', // Añadido para métricas premium
+  pink: '#E1306C'  // Añadido para usuarios/clientes
 };
 
 // --- CONSTANTES DE FUENTES ---
@@ -63,13 +65,28 @@ interface EmpresaConEstadisticas extends Empresa {
   clientesUnicos: number;
 }
 
+// --- NUEVA INTERFAZ DE MÉTRICAS GLOBALES ---
+interface LandingStats {
+  totalClientes: number;
+  totalEmpresas: number;
+  totalUsuarios: number;
+}
+
 export default function AdminDashboardScreen() {
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
-  const { width } = useWindowDimensions(); // Reemplaza Dimensions.get('window')
+  const { width } = useWindowDimensions();
 
   const [empresasRaw, setEmpresasRaw] = useState<Empresa[]>([]);
   const [metricasRaw, setMetricasRaw] = useState<Metrica[]>([]);
+  
+  // --- NUEVO ESTADO PARA ESTADÍSTICAS GLOBALES ---
+  const [landingStats, setLandingStats] = useState<LandingStats>({
+    totalClientes: 0,
+    totalEmpresas: 0,
+    totalUsuarios: 0
+  });
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [jwtState, setJwt] = useState<string | null>(null);
@@ -93,10 +110,7 @@ export default function AdminDashboardScreen() {
     'Poppins-Bold': require('../../../assets/fonts/Poppins-Bold.ttf'),
   });
 
-  // Generador dinámico de estilos responsivos
   const styles = useMemo(() => getResponsiveStyles(width, safeAreaInsets.top), [width, safeAreaInsets.top]);
-
-  // Función para escalar valores dentro del componente (para estilos inline)
   const normalize = useMemo(() => {
     const scale = width / 375;
     return (size: number) => Math.round(size * scale);
@@ -120,13 +134,25 @@ export default function AdminDashboardScreen() {
 
   const fetchData = async () => {
     try {
-      const [empresasRes, metricasRes] = await Promise.all([
+      // Función inteligente para buscar la ruta de métricas de landing (con fallback)
+      const fetchLandingStats = async () => {
+        try {
+          let res = await fetch(`${API_URL}/api/landing/metricas`);
+          if (!res.ok) res = await fetch(`${API_URL}/metricas`); // Fallback si no hay prefijo
+          return res;
+        } catch (e) {
+          return null;
+        }
+      };
+
+      const [empresasRes, metricasRes, statsRes] = await Promise.all([
         fetch(`${API_URL}/api/empresa`, {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwtState}` },
         }),
         fetch(`${API_URL}/api/metricas`, {
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwtState}` },
-        })
+        }),
+        fetchLandingStats() // Llamada a la nueva ruta
       ]);
 
       if (empresasRes.ok) {
@@ -141,6 +167,16 @@ export default function AdminDashboardScreen() {
         setMetricasRaw(dataFinal);
       } else {
         setMetricasRaw([]);
+      }
+
+      // Procesar la nueva ruta de usuarios totales
+      if (statsRes && statsRes.ok) {
+        const statsData = await statsRes.json();
+        setLandingStats({
+          totalClientes: statsData.totalClientes || 0,
+          totalEmpresas: statsData.totalEmpresas || 0,
+          totalUsuarios: statsData.totalUsuarios || 0
+        });
       }
 
     } catch (error) {
@@ -274,15 +310,24 @@ export default function AdminDashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />}
       >
-        {/* KPI GLOBAL */}
+        {/* KPI GLOBAL ACTUALIZADO */}
         <Text style={styles.sectionTitle}>MÉTRICAS GLOBALES</Text>
         <View style={styles.kpiGrid}>
+          {/* Fila 1: Puntos y Escaneos */}
           <View style={styles.kpiRow}>
-            <KpiCard title="Puntos" value={globalStats.puntos.toLocaleString()} icon="gift-outline" color={COLORS.accent} />
+            <KpiCard title="Puntos Dados" value={globalStats.puntos.toLocaleString()} icon="gift-outline" color={COLORS.accent} />
             <KpiCard title="Escaneos" value={globalStats.scans.toLocaleString()} icon="scan-outline" color="#FF6D00" />
           </View>
+          
+          {/* Fila 2: Clientes y Empresas (Usando los datos nuevos del backend) */}
+          <View style={styles.kpiRow}>
+            <KpiCard title="Clientes App" value={landingStats.totalClientes.toLocaleString()} icon="phone-portrait-outline" color={COLORS.pink} />
+            <KpiCard title="Empresas" value={(landingStats.totalEmpresas || globalStats.empresasActivas).toLocaleString()} icon="business-outline" color="#4F9CF9" />
+          </View>
+
+          {/* Fila 3: Total Usuarios Generales */}
           <View style={styles.kpiFullRow}>
-            <KpiCard title="Empresas Activas" value={globalStats.empresasActivas} icon="business-outline" color="#4F9CF9" />
+            <KpiCard title="Total Usuarios Registrados" value={landingStats.totalUsuarios.toLocaleString()} icon="people-outline" color={COLORS.gold} />
           </View>
         </View>
 

@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  RefreshControl,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -28,6 +30,7 @@ const COLORS = {
   text: '#ffffff',
   textSec: '#8b9bb4',
   border: '#232936',
+  gold: '#D4AF37', 
 };
 
 // --- CONSTANTES DE FUENTES ---
@@ -41,15 +44,15 @@ const FONTS = {
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const navigator: any = useNavigation();
-  // Hook dinámico para responsividad (reacciona a rotaciones y tamaños de iPad)
   const { width } = useWindowDimensions();
 
   const [nombreClienteState, setNameClienteState] = useState('');
   const [qrData, setQrData] = useState('');
+  const [puntosTotales, setPuntosTotales] = useState(0); 
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // NUEVO: Estado para recarga
   const [hasError, setHasError] = useState(false);
 
-  // Carga de fuentes
   const [fontsLoaded] = useFonts({
     'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
     'Poppins-Regular': require('../../../assets/fonts/Poppins-Regular.ttf'),
@@ -57,42 +60,32 @@ export default function ProfileScreen() {
     'Poppins-Bold': require('../../../assets/fonts/Poppins-Bold.ttf'),
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      async function loadUserDataAndGenerateQr() {
-        setIsLoading(true);
-        setHasError(false);
-        setQrData('');
+  // --- NUEVA LÓGICA REUTILIZABLE PARA RECARGA ---
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setHasError(false);
 
-        try {
-          const secureUserId = await SecureStore.getItemAsync('user_id') || '';
-          const secureNameCliente = await SecureStore.getItemAsync('nameCliente') || '';
-          const jwt = await SecureStore.getItemAsync('jwt') || '';
+    try {
+      const secureUserId = await SecureStore.getItemAsync('user_id') || '';
+      const secureNameCliente = await SecureStore.getItemAsync('nameCliente') || '';
+      const jwt = await SecureStore.getItemAsync('jwt') || '';
 
-          setNameClienteState(secureNameCliente);
+      setNameClienteState(secureNameCliente);
 
-          if (secureUserId && jwt) {
-            await fetchQrData(secureUserId, jwt);
-          } else {
-            setHasError(true);
-          }
-        } catch (error) {
-          console.error('Error:', error);
-          setHasError(true);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-
-      async function fetchQrData(clientId: string, token: string) {
-        try {
+      if (secureUserId && jwt) {
+        // Función interna para el QR
+        const fetchQrData = async () => {
           const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/qr/generate`, {
             method: "POST",
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
+              'Authorization': `Bearer ${jwt}`,
             },
-            body: JSON.stringify({ client_id: parseInt(clientId, 10) }),
+            body: JSON.stringify({ client_id: parseInt(secureUserId, 10) }),
           });
           const data = await response.json();
           if (response.ok) {
@@ -100,15 +93,52 @@ export default function ProfileScreen() {
           } else {
             setHasError(true);
           }
-        } catch (error) {
-          setHasError(true);
-        }
-      }
+        };
 
-      loadUserDataAndGenerateQr();
+        // Función interna para los Puntos
+        const fetchUserPoints = async () => {
+          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/metricas/cliente/${secureUserId}`, {
+            method: "GET",
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${jwt}`,
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data)) {
+              const total = data.reduce((sum, metrica) => sum + (metrica.puntos || 0), 0);
+              setPuntosTotales(total);
+            }
+          }
+        };
+
+        // Ejecutar ambas peticiones simultáneamente
+        await Promise.all([fetchQrData(), fetchUserPoints()]);
+      } else {
+        setHasError(true);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
       return () => { };
-    }, [])
+    }, [loadData])
   );
+
+  // --- FUNCIÓN DEL BOTÓN REFRESH ---
+  const onRefresh = () => {
+    loadData(true);
+  };
 
   const handleDeleteAccount = async () => {
     Alert.alert(
@@ -198,25 +228,44 @@ export default function ProfileScreen() {
     );
   }
 
-  // Cálculos dinámicos para responsividad
   const isTablet = width >= 768;
-  const qrFrameSize = Math.min(width * 0.45, 200); // El QR crecerá máximo hasta 200px
+  const qrFrameSize = Math.min(width * 0.45, 200); 
   const cardResponsiveStyle = {
     width: width * 0.9,
-    maxWidth: 420 // Evita que en iPads la tarjeta sea obscenamente ancha
+    maxWidth: 420 
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-      {/* HEADER PROFESIONAL */}
+      {/* HEADER PROFESIONAL CON BOTÓN REFRESH */}
       <View style={styles.header}>
+        {/* Spacer invisible para centrar el título perfectamente */}
+        <View style={{ width: 44 }} />
         <Text style={styles.headerTitle}>MI PERFIL</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity 
+          onPress={onRefresh} 
+          style={styles.headerBtn} 
+          disabled={refreshing}
+          activeOpacity={0.7}
+        >
+          {refreshing ? (
+            <ActivityIndicator size="small" color={COLORS.accent} />
+          ) : (
+            <Ionicons name="refresh-outline" size={22} color={COLORS.accent} />
+          )}
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
+      {/* SCROLLVIEW PERMITE DESLIZAR PARA ACTUALIZAR */}
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />
+        }
+      >
         {/* TARJETA DE PERFIL TIPO MEMBRESÍA */}
         <View style={[styles.profileCard, cardResponsiveStyle]}>
           <View style={styles.cardHeader}>
@@ -249,6 +298,17 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* MÓDULO DE PUNTOS ACUMULADOS */}
+        <View style={[styles.pointsCard, cardResponsiveStyle]}>
+          <View style={styles.pointsIconBadge}>
+            <Ionicons name="star" size={28} color={COLORS.gold} />
+          </View>
+          <View style={styles.pointsInfo}>
+            <Text style={styles.pointsTitle}>TOTAL PUNTOS ACUMULADOS</Text>
+            <Text style={styles.pointsValue}>{puntosTotales.toLocaleString()}</Text>
+          </View>
+        </View>
+
         <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
           <Text style={styles.deleteAccountButtonText}>Borrar Cuenta</Text>
         </TouchableOpacity>
@@ -256,7 +316,8 @@ export default function ProfileScreen() {
         <Text style={styles.footerNote}>
           Presenta este código en los comercios aliados para recibir tus beneficios.
         </Text>
-      </View>
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -277,7 +338,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center', // Centrado mejorado
+    justifyContent: 'space-between', // Centrado equilibrado por el Spacer
     paddingVertical: 15,
     paddingHorizontal: 20,
     backgroundColor: COLORS.background,
@@ -289,8 +350,17 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center'
   },
+  headerBtn: {
+    width: 44,
+    height: 44,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   content: {
-    flex: 1,
     alignItems: 'center',
     paddingTop: 10,
     paddingHorizontal: 15,
@@ -308,19 +378,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 15,
     elevation: 8,
-    width: '100%', // Se sobrescribe por cardResponsiveStyle
+    width: '100%', 
   },
   cardHeader: {
     width: '100%',
     flexDirection: 'row',
-    justifyContent: 'center', // Mejorado para centrar el logo
+    justifyContent: 'center', 
     alignItems: 'center',
     marginBottom: 25
   },
   brandName: {
     fontFamily: FONTS.title,
     color: COLORS.accent,
-    fontSize: 16, // Ligeramente más grande
+    fontSize: 16, 
     letterSpacing: 2
   },
   userInfoSection: {
@@ -371,12 +441,50 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1
   },
+  // --- MÓDULO DE PUNTOS ---
+  pointsCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    width: '100%',
+  },
+  pointsIconBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    marginRight: 15,
+  },
+  pointsInfo: {
+    flex: 1,
+  },
+  pointsTitle: {
+    fontFamily: FONTS.textBold,
+    color: COLORS.textSec,
+    fontSize: 11,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  pointsValue: {
+    fontFamily: FONTS.title,
+    color: COLORS.gold,
+    fontSize: 24,
+  },
   // --- ACCIONES ---
   deleteAccountButton: {
     marginTop: 30,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    backgroundColor: 'rgba(255, 60, 60, 0.1)', // Diseño más sutil y estándar para eliminar
+    backgroundColor: 'rgba(255, 60, 60, 0.1)', 
     borderWidth: 1,
     borderColor: 'rgba(255, 60, 60, 0.3)',
     borderRadius: 12,

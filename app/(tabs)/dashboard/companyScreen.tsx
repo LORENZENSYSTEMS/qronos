@@ -3,19 +3,15 @@ import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
     Image,
     KeyboardAvoidingView,
-    Modal // <-- IMPORTANTE: Añadido Modal
-    ,
-
-
-
-
+    Modal,
     Platform,
+    RefreshControl,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -61,7 +57,7 @@ const COUNTRIES = Object.keys(LOCATIONS);
 // --- HOOK DE AUTORIZACIÓN ---
 const useEmpresaCheck = () => {
     const [isAuthorized, setIsAuthorized] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingAuth, setIsLoadingAuth] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [empresaId, setEmpresaId] = useState<string | null>(null);
 
@@ -89,21 +85,21 @@ const useEmpresaCheck = () => {
                 setIsAuthorized(false);
                 setErrorMessage("Error al validar credenciales.");
             } finally {
-                setIsLoading(false);
+                setIsLoadingAuth(false);
             }
         };
 
         checkAccess();
     }, []);
 
-    return { isAuthorized, isLoading, errorMessage, empresaId };
+    return { isAuthorized, isLoadingAuth, errorMessage, empresaId };
 };
 
 export default function CompanyScreen() {
     const navigator = useNavigation();
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { isAuthorized, isLoading, errorMessage, empresaId } = useEmpresaCheck();
+    const { isAuthorized, isLoadingAuth, errorMessage, empresaId } = useEmpresaCheck();
 
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
@@ -112,6 +108,9 @@ export default function CompanyScreen() {
     const [totalScans, setTotalScans] = useState<number | null>(null);
     const [totalPoints, setTotalPoints] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    
+    // --- ESTADO PARA RECARGA ---
+    const [refreshing, setRefreshing] = useState(false);
 
     // --- ESTADOS PARA LOS MENÚS DESPLEGABLES ---
     const [countryModalVisible, setCountryModalVisible] = useState(false);
@@ -121,6 +120,7 @@ export default function CompanyScreen() {
     const [formData, setFormData] = useState({
         descripcion: '',
         ubicacionMaps: '',
+        whatsapp: '', 
         descuento: '',
         pais: '',
         ciudad: '',
@@ -138,11 +138,19 @@ export default function CompanyScreen() {
         'Poppins-Bold': require('../../../assets/fonts/Poppins-Bold.ttf'),
     });
 
-    const getEmpresaData = async (id: string) => {
+    // --- LÓGICA REUTILIZABLE DE CARGA DE DATOS ---
+    const loadData = useCallback(async (isRefresh = false) => {
+        if (!empresaId) return;
+        
+        if (isRefresh) {
+            setRefreshing(true);
+        }
+
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-            const responseMetricas = await fetch(`${API_URL}/api/metricas/empresa/${id}`);
+            // 1. Cargar Métricas
+            const responseMetricas = await fetch(`${API_URL}/api/metricas/empresa/${empresaId}`);
             const metricas = await responseMetricas.json();
 
             if (Array.isArray(metricas)) {
@@ -155,7 +163,8 @@ export default function CompanyScreen() {
                 setTotalPoints(0);
             }
 
-            const responseEmpresa = await fetch(`${API_URL}/api/empresa/${id}`);
+            // 2. Cargar Información de la Empresa
+            const responseEmpresa = await fetch(`${API_URL}/api/empresa/${empresaId}`);
             if (responseEmpresa.ok) {
                 const data = await responseEmpresa.json();
                 const catFromBd = data.categoria;
@@ -164,6 +173,7 @@ export default function CompanyScreen() {
                 setFormData({
                     descripcion: data.descripcion || '',
                     ubicacionMaps: data.ubicacionMaps || '',
+                    whatsapp: data.whatsapp || '', 
                     descuento: data.descuento || '',
                     pais: data.pais || '',
                     ciudad: data.ciudad || '',
@@ -177,7 +187,23 @@ export default function CompanyScreen() {
         } catch (error) {
             console.error("Error fetching data:", error);
             Alert.alert("Error", "No se pudieron cargar los datos. Verifica tu conexión.");
+        } finally {
+            if (isRefresh) {
+                setRefreshing(false);
+            }
         }
+    }, [empresaId]);
+
+    // Efecto Inicial
+    useEffect(() => {
+        if (isAuthorized && empresaId) {
+            loadData(false);
+        }
+    }, [isAuthorized, empresaId, loadData]);
+
+    // Función del botón y del Pull-to-Refresh
+    const onRefresh = () => {
+        loadData(true);
     };
 
     const updateEmpresaData = async () => {
@@ -190,6 +216,7 @@ export default function CompanyScreen() {
 
             data.append('descripcion', formData.descripcion);
             data.append('ubicacionMaps', formData.ubicacionMaps);
+            data.append('whatsapp', formData.whatsapp); 
             data.append('descuento', formData.descuento);
             data.append('pais', formData.pais);
             data.append('ciudad', formData.ciudad);
@@ -233,12 +260,6 @@ export default function CompanyScreen() {
         }
     };
 
-    useEffect(() => {
-        if (isAuthorized && empresaId) {
-            getEmpresaData(empresaId);
-        }
-    }, [isAuthorized, empresaId]);
-
     const pickImage = async (field: keyof typeof formData) => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -258,7 +279,7 @@ export default function CompanyScreen() {
         }
     };
 
-    if (!fontsLoaded || isLoading) {
+    if (!fontsLoaded || isLoadingAuth) {
         return (
             <View style={[styles.centerContainer, { paddingTop: insets.top }]}>
                 <ActivityIndicator size="large" color={COLORS.accent} />
@@ -276,7 +297,6 @@ export default function CompanyScreen() {
         );
     }
 
-    // Ciudades disponibles basadas en el país seleccionado
     // @ts-ignore
     const availableCities = formData.pais && LOCATIONS[formData.pais] ? LOCATIONS[formData.pais] : [];
 
@@ -292,6 +312,9 @@ export default function CompanyScreen() {
                         styles.companyContainer,
                         isTablet && { maxWidth: 800, alignSelf: 'center', width: '100%' }
                     ]}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />
+                    }
                 >
                     <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
@@ -302,6 +325,19 @@ export default function CompanyScreen() {
                                 PANEL DE <Text style={{ color: COLORS.accent }}>EMPRESA</Text>
                             </Text>
                         </View>
+                        {/* --- BOTÓN DE RECARGA EN EL HEADER --- */}
+                        <TouchableOpacity 
+                            onPress={onRefresh} 
+                            style={styles.headerBtn} 
+                            disabled={refreshing}
+                            activeOpacity={0.7}
+                        >
+                            {refreshing ? (
+                                <ActivityIndicator size="small" color={COLORS.accent} />
+                            ) : (
+                                <Ionicons name="refresh-outline" size={22} color={COLORS.accent} />
+                            )}
+                        </TouchableOpacity>
                     </View>
 
                     <View style={{ marginTop: width > 400 ? 40 : 25 }}>
@@ -329,7 +365,6 @@ export default function CompanyScreen() {
                             </View>
                         </View>
 
-                        {/* --- BOTÓN GESTIÓN DE PRODUCTOS --- */}
                         <TouchableOpacity
                             style={styles.productsLinkBtn}
                             onPress={() => router.push('/(tabs)/dashboard/products' as any)}
@@ -404,7 +439,6 @@ export default function CompanyScreen() {
                             onChangeText={(t) => setFormData({ ...formData, descripcion: t })}
                         />
 
-                        {/* --- SELECTORES DE PAÍS Y CIUDAD --- */}
                         <View style={[styles.rowInputs, isSmallScreen && { flexDirection: 'column' }]}>
                             <View style={{ flex: 1, marginRight: isSmallScreen ? 0 : 10 }}>
                                 <Text style={styles.label}>País</Text>
@@ -452,6 +486,16 @@ export default function CompanyScreen() {
                             placeholderTextColor={COLORS.textSec}
                             value={formData.ubicacionMaps}
                             onChangeText={(t) => setFormData({ ...formData, ubicacionMaps: t })}
+                        />
+
+                        <Text style={styles.label}>Número de WhatsApp (Incluye código de país)</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Ej: 573001234567"
+                            placeholderTextColor={COLORS.textSec}
+                            keyboardType="phone-pad"
+                            value={formData.whatsapp}
+                            onChangeText={(t) => setFormData({ ...formData, whatsapp: t })}
                         />
 
                         <Text style={styles.label}>Fotos para el Index (Opcional)</Text>
@@ -502,7 +546,6 @@ export default function CompanyScreen() {
                                 key={c}
                                 style={styles.modalOption}
                                 onPress={() => {
-                                    // Al cambiar de país, reseteamos la ciudad para evitar inconsistencias
                                     setFormData({ ...formData, pais: c, ciudad: '' });
                                     setCountryModalVisible(false);
                                 }}
@@ -595,6 +638,18 @@ const styles = StyleSheet.create({
         textAlign: "left",
         flexWrap: 'wrap'
     },
+    // --- ESTILO DEL BOTÓN HEADER ---
+    headerBtn: {
+        width: 44,
+        height: 44,
+        backgroundColor: COLORS.cardBg,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 15
+    },
     card: {
         backgroundColor: COLORS.cardBg,
         padding: 20,
@@ -677,7 +732,7 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.textRegular,
         marginBottom: 16,
         fontSize: 14,
-        height: 50, // Fijado para que text inputs y botones coincidan en tamaño
+        minHeight: 50,
     },
     categoryContainer: {
         flexDirection: 'row',
@@ -779,8 +834,6 @@ const styles = StyleSheet.create({
         fontSize: 10,
         marginTop: 4
     },
-
-    // --- ESTILOS DE LOS MODALES ---
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -815,7 +868,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textAlign: 'center'
     },
-    // --- ESTILOS ADICIONALES ---
     productsLinkBtn: {
         backgroundColor: COLORS.accent,
         borderRadius: 18,

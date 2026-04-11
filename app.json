@@ -4,7 +4,7 @@
     "slug": "qronos",
     "version": "1.1.1",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/QronnosIcon.png",
     "scheme": "qronos",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -21,8 +21,8 @@
       "package": "com.sebas.qronos",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/images/QronnosIcon.png",
+        "backgroundColor": "#090a0c"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -53,12 +53,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icon.png",
+          "image": "./assets/images/QronnosIcon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#E6F4FE",
+          "backgroundColor": "#090a0c",
           "dark": {
-            "image": "./assets/images/icon.png",
-            "backgroundColor": "#000000"
+            "image": "./assets/images/QronnosIcon.png",
+            "backgroundColor": "#090a0c"
           }
         }
       ],
