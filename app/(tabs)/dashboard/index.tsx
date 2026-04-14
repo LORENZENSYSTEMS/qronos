@@ -51,13 +51,17 @@ const FONTS = {
 type Category = 'Todos' | 'Restaurantes' | 'Tiendas' | 'Bar' | string;
 const CATEGORIES: Category[] = ['Todos', 'Restaurantes', 'Bar', "Tiendas"];
 
-const COUNTRIES_CONFIG: { [key: string]: string[] } = {
-  'Colombia': ['Todas', 'Cartagena de Indias'],
-  'Emiratos Árabes Unidos': ['Todas', 'Dubái'],
-  'Argentina': ['Todas', 'Rosario']
+// --- NUEVA CONFIGURACIÓN DE PAÍSES Y CIUDADES CON BANDERAS ---
+const COUNTRIES_CONFIG: { [key: string]: { flag: string, cities: string[] } } = {
+  'Colombia': { 
+    flag: '🇨🇴', 
+    cities: ['Todas', 'Cartagena de Indias'] 
+  },
+  'Emiratos Árabes Unidos': { 
+    flag: '🇦🇪', 
+    cities: ['Todas', 'Dubái'] 
+  }
 };
-
-const COUNTRIES_LIST = Object.keys(COUNTRIES_CONFIG);
 
 interface Lugar {
   id: number;
@@ -149,7 +153,7 @@ export default function HomeScreen() {
 
   // --- ESTADOS ---
   const [cart, setCart] = useState<Record<number, any>>({});
-  const [viewerImage, setViewerImage] = useState<string | null>(null); // Estado de la imagen ampliada
+  const [viewerImage, setViewerImage] = useState<string | null>(null);
 
   const [fontsLoaded] = useFonts({
     'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
@@ -162,9 +166,8 @@ export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category>('Todos');
   const [selectedCountry, setSelectedCountry] = useState<string>('Colombia');
-  const [isCountryMenuOpen, setIsCountryMenuOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState<string>('Todas');
-  const [isCityMenuOpen, setIsCityMenuOpen] = useState(false);
+  const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
   const [isEmpresa, setIsEmpresa] = useState(false);
 
   useFocusEffect(
@@ -181,10 +184,6 @@ export default function HomeScreen() {
     refetchStores();
   };
 
-  const availableCities = useMemo(() => {
-    return COUNTRIES_CONFIG[selectedCountry] || ['Todas'];
-  }, [selectedCountry]);
-
   const filteredLugares = useMemo(() => {
     return lugares.filter(lugar => {
       const matchCountry = lugar.pais?.toLowerCase() === selectedCountry.toLowerCase();
@@ -193,12 +192,6 @@ export default function HomeScreen() {
       return matchCountry && matchCity && matchCategory;
     });
   }, [selectedCategory, selectedCity, selectedCountry, lugares]);
-
-  const handleCountryChange = (country: string) => {
-    setSelectedCountry(country);
-    setSelectedCity('Todas');
-    setIsCountryMenuOpen(false);
-  };
 
   const handleOpenMaps = async (mapLink?: string | null) => {
     if (!mapLink) {
@@ -286,76 +279,61 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-      <View style={[styles.header, { paddingTop: Math.max(safeAreaInsets.top, 10) }]}>
-        <View style={styles.headerTopRow}>
-          <View style={{ alignItems: 'center', flex: 1 }}>
-            <Text style={styles.headerSubtitle}>ECOSISTEMA</Text>
-            <Text style={styles.headerTitle}>QRONNOS</Text>
-          </View>
-        </View>
-
-        <View style={styles.locationFiltersContainer}>
-          <TouchableOpacity
-            style={styles.countrySelectorBtn}
-            onPress={() => {
-              setIsCountryMenuOpen(!isCountryMenuOpen);
-              setIsCityMenuOpen(false);
-            }}
-          >
-            <Ionicons name="globe-outline" size={12} color={COLORS.textSec} />
-            <Text style={styles.countrySelectorText}>{selectedCountry}</Text>
-            <Ionicons name="chevron-down" size={10} color={COLORS.textSec} />
-          </TouchableOpacity>
+      {/* --- ENCABEZADO --- */}
+      <View style={[styles.header, { paddingTop: Math.max(safeAreaInsets.top, 5) }]}>
+        <View style={styles.headerRow}>
+          
+          {/* TÍTULO CON ESTILO ALUCINANTE (Q en verde) */}
+          <Text style={styles.headerTitleLeft}>
+            <Text style={{ color: COLORS.accent, textShadowColor: 'rgba(1, 195, 142, 0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }}>Q</Text>RONNOS
+          </Text>
 
           <TouchableOpacity
-            style={styles.citySelectorBtn}
-            onPress={() => {
-              setIsCityMenuOpen(!isCityMenuOpen);
-              setIsCountryMenuOpen(false);
-            }}
+            style={styles.locationSelectorBtn}
+            onPress={() => setIsLocationMenuOpen(!isLocationMenuOpen)}
           >
-            <Ionicons name="location-sharp" size={16} color={COLORS.accent} />
-            <Text style={styles.citySelectorText}>
-              {selectedCity === 'Todas' ? `Explorando todo` : selectedCity}
+            <Ionicons name="location-sharp" size={14} color={COLORS.accent} />
+            <Text style={styles.locationSelectorText} numberOfLines={1}>
+              {selectedCountry}, {selectedCity}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={COLORS.textSec} />
+            <Ionicons name="chevron-down" size={12} color={COLORS.textSec} />
           </TouchableOpacity>
+          
         </View>
       </View>
 
-      {isCountryMenuOpen && (
-        <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 80, maxWidth: contentWidth }]}>
-          <Text style={styles.dropdownHeaderLabel}>Selecciona país</Text>
-          {COUNTRIES_LIST.map((pais) => (
-            <TouchableOpacity
-              key={pais}
-              style={styles.dropdownItem}
-              onPress={() => handleCountryChange(pais)}
-            >
-              <Text style={[styles.dropdownText, selectedCountry === pais && styles.activeDropdownText]}>
-                {pais}
-              </Text>
-              {selectedCountry === pais && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {isCityMenuOpen && (
-        <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 125, maxWidth: contentWidth }]}>
-          <Text style={styles.dropdownHeaderLabel}>Ciudades en {selectedCountry}</Text>
-          {availableCities.map((ciudad) => (
-            <TouchableOpacity
-              key={ciudad}
-              style={styles.dropdownItem}
-              onPress={() => { setSelectedCity(ciudad); setIsCityMenuOpen(false); }}
-            >
-              <Text style={[styles.dropdownText, selectedCity === ciudad && styles.activeDropdownText]}>
-                {ciudad}
-              </Text>
-              {selectedCity === ciudad && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
-            </TouchableOpacity>
-          ))}
+      {/* --- MENÚ DESPLEGABLE UNIFICADO --- */}
+      {isLocationMenuOpen && (
+        <View style={[styles.floatingDropdown, { top: Math.max(safeAreaInsets.top, 5) + 45, maxWidth: contentWidth }]}>
+          <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
+            <Text style={styles.dropdownHeaderLabel}>Selecciona tu ubicación</Text>
+            
+            {Object.entries(COUNTRIES_CONFIG).map(([country, data]) => (
+              <View key={country} style={{ marginBottom: 10 }}>
+                <Text style={styles.dropdownCountryText}>{country} {data.flag}</Text>
+                
+                {data.cities.map((city) => {
+                  const isSelected = selectedCountry === country && selectedCity === city;
+                  return (
+                    <TouchableOpacity
+                      key={`${country}-${city}`}
+                      style={styles.dropdownCityItem}
+                      onPress={() => {
+                        setSelectedCountry(country);
+                        setSelectedCity(city);
+                        setIsLocationMenuOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownCityText, isSelected && styles.activeDropdownText]}>
+                        •  {city}
+                      </Text>
+                      {isSelected && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+          </ScrollView>
         </View>
       )}
 
@@ -618,24 +596,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scrollContent: { paddingBottom: 100 },
 
-  // HEADER
-  header: { backgroundColor: COLORS.background, paddingHorizontal: 24, paddingBottom: 5, zIndex: 10 },
-  headerTopRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
-  headerSubtitle: { fontFamily: FONTS.textBold, fontSize: 9, color: COLORS.accent, letterSpacing: 4, marginBottom: 2, textAlign: 'center' },
-  headerTitle: { fontFamily: FONTS.title, fontSize: 24, color: COLORS.text, letterSpacing: 1, textAlign: 'center' },
+  // NUEVO HEADER (En Fila)
+  header: { backgroundColor: COLORS.background, paddingHorizontal: 24, paddingBottom: 10, zIndex: 10 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitleLeft: { fontFamily: FONTS.title, fontSize: 20, color: COLORS.text, letterSpacing: 1 },
 
-  // FILTERS
-  locationFiltersContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5, flexWrap: 'wrap', gap: 10 },
-  countrySelectorBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: '#1a1d24' },
-  countrySelectorText: { color: COLORS.textSec, fontSize: 11, fontFamily: FONTS.textMedium, marginHorizontal: 6 },
-  citySelectorBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 30, borderWidth: 1, borderColor: COLORS.accent, flexShrink: 1 },
-  citySelectorText: { color: COLORS.text, marginHorizontal: 8, fontSize: 13, fontFamily: FONTS.textMedium },
+  // FILTERS (Países y Ciudades Unificados)
+  locationSelectorBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, flexShrink: 1, maxWidth: '65%' },
+  locationSelectorText: { color: COLORS.text, marginHorizontal: 6, fontSize: 11, fontFamily: FONTS.textMedium, flexShrink: 1 },
 
-  // DROPDOWNS
+  // DROPDOWNS UNIFICADO
   floatingDropdown: { position: 'absolute', left: 24, right: 24, backgroundColor: '#1a1d24', borderRadius: 16, padding: 8, zIndex: 100, borderWidth: 1, borderColor: COLORS.border, elevation: 20, alignSelf: 'center' },
   dropdownHeaderLabel: { fontSize: 10, color: COLORS.textSec, fontFamily: FONTS.textBold, paddingHorizontal: 12, paddingVertical: 8, textTransform: 'uppercase' },
-  dropdownItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.03)' },
-  dropdownText: { color: COLORS.textSec, fontSize: 14, fontFamily: FONTS.textRegular },
+  dropdownCountryText: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.textBold, paddingHorizontal: 12, marginTop: 8, marginBottom: 4 },
+  dropdownCityItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, paddingLeft: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.03)' },
+  dropdownCityText: { color: COLORS.textSec, fontSize: 13, fontFamily: FONTS.textRegular },
   activeDropdownText: { color: COLORS.accent, fontFamily: FONTS.textBold },
 
   // CATEGORIES
