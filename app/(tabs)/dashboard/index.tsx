@@ -154,6 +154,7 @@ export default function HomeScreen() {
   // --- ESTADOS ---
   const [cart, setCart] = useState<Record<number, any>>({});
   const [viewerImage, setViewerImage] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('Usuario');
 
   const [fontsLoaded] = useFonts({
     'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
@@ -172,11 +173,16 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const checkRole = async () => {
+      const fetchUserData = async () => {
         const empresaId = await SecureStore.getItemAsync('empresa_id');
         setIsEmpresa(!!empresaId);
+        
+        const name = await SecureStore.getItemAsync('nameCliente');
+        if (name) {
+          setUserName(name);
+        }
       };
-      checkRole();
+      fetchUserData();
     }, [])
   );
 
@@ -220,13 +226,14 @@ export default function HomeScreen() {
   const sendOrderWhatsApp = async (lugar: any) => {
     const cartArray = Object.values(cart);
     
+    // BLOQUEO: Solo se puede enviar WhatsApp si hay una orden
     if (cartArray.length === 0) {
-      if (!lugar.whatsapp) {
-        Alert.alert("Aviso", "Esta empresa no ha registrado un número de contacto.");
-        return;
-      }
-      const cleanPhone = lugar.whatsapp.replace(/[^\d]/g, '');
-      Linking.openURL(`https://wa.me/${cleanPhone}`);
+      Alert.alert("Carrito vacío", "Debes agregar al menos un producto al carrito para enviar una orden de compra.");
+      return;
+    }
+
+    if (!lugar.whatsapp) {
+      Alert.alert("Aviso", "Esta empresa no ha registrado un número de contacto.");
       return;
     }
 
@@ -238,6 +245,7 @@ export default function HomeScreen() {
     const orderId = Math.floor(10000 + Math.random() * 90000);
 
     let mensaje = `*ORDEN DESDE QRONNOS*\n`;
+    mensaje += `👤 *Cliente:* ${userName}\n`;
     mensaje += `(ID: #${orderId})\n\n`;
     mensaje += `*PRODUCTOS:*\n`;
     
@@ -252,7 +260,7 @@ export default function HomeScreen() {
     }
     mensaje += `\n✅ *TOTAL A PAGAR: $${total.toLocaleString()}*`;
 
-    const cleanPhone = lugar.whatsapp?.replace(/[^\d]/g, '');
+    const cleanPhone = lugar.whatsapp.replace(/[^\d]/g, '');
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(mensaje)}`;
     
     const supported = await Linking.canOpenURL(url);
@@ -283,7 +291,6 @@ export default function HomeScreen() {
       <View style={[styles.header, { paddingTop: Math.max(safeAreaInsets.top, 5) }]}>
         <View style={styles.headerRow}>
           
-          {/* TÍTULO CON ESTILO ALUCINANTE (Q en verde) */}
           <Text style={styles.headerTitleLeft}>
             <Text style={{ color: COLORS.accent, textShadowColor: 'rgba(1, 195, 142, 0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }}>Q</Text>RONNOS
           </Text>
