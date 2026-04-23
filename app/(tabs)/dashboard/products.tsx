@@ -52,6 +52,7 @@ export default function ProductsScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [empresaId, setEmpresaId] = useState<string | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
+    const [productToEdit, setProductToEdit] = useState<Producto | null>(null);
 
     const fetchProductos = async (id: string) => {
         try {
@@ -93,6 +94,16 @@ export default function ProductsScreen() {
         }
     };
 
+    const handleEditProduct = (producto: Producto) => {
+        setProductToEdit(producto);
+        setModalVisible(true);
+    };
+
+    const handleAddNewProduct = () => {
+        setProductToEdit(null);
+        setModalVisible(true);
+    };
+
     if (isLoading) {
         return (
             <View style={styles.center}>
@@ -130,6 +141,7 @@ export default function ProductsScreen() {
                                 onDeleteSuccess={(id) => {
                                     setProductos(prev => prev.filter(p => p.producto_id !== id));
                                 }}
+                                onEdit={() => handleEditProduct(item)}
                             />
                         </View>
                     )}
@@ -150,7 +162,7 @@ export default function ProductsScreen() {
 
             <TouchableOpacity
                 style={styles.fab}
-                onPress={() => setModalVisible(true)}
+                onPress={handleAddNewProduct}
                 activeOpacity={0.8}
             >
                 <Ionicons name="add" size={32} color="#000" />
@@ -162,6 +174,7 @@ export default function ProductsScreen() {
                     onClose={() => setModalVisible(false)}
                     onSuccess={() => empresaId && fetchProductos(empresaId)}
                     empresaId={empresaId}
+                    productToEdit={productToEdit}
                 />
             )}
         </View>

@@ -37,15 +37,37 @@ interface ProductFormModalProps {
     onClose: () => void;
     onSuccess: () => void;
     empresaId: string;
+    productToEdit?: {
+        producto_id: number;
+        nombre: string;
+        precio: number;
+        descripcion: string;
+        imagenUrl: string;
+    } | null;
 }
 
-export default function ProductFormModal({ visible, onClose, onSuccess, empresaId }: ProductFormModalProps) {
-    const [nombre, setNombre] = useState('');
-    const [precio, setPrecio] = useState('');
-    const [descripcion, setDescripcion] = useState('');
-    const [imagen, setImagen] = useState<string | null>(null);
+export default function ProductFormModal({ visible, onClose, onSuccess, empresaId, productToEdit }: ProductFormModalProps) {
+    const [nombre, setNombre] = useState(productToEdit?.nombre || '');
+    const [precio, setPrecio] = useState(productToEdit?.precio?.toString() || '');
+    const [descripcion, setDescripcion] = useState(productToEdit?.descripcion || '');
+    const [imagen, setImagen] = useState<string | null>(productToEdit?.imagenUrl || null);
     const [imagenAsset, setImagenAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Efecto para resetear el formulario cuando se abre para editar o crear
+    React.useEffect(() => {
+        if (visible) {
+            if (productToEdit) {
+                setNombre(productToEdit.nombre);
+                setPrecio(productToEdit.precio.toString());
+                setDescripcion(productToEdit.descripcion);
+                setImagen(productToEdit.imagenUrl);
+                setImagenAsset(null);
+            } else {
+                resetForm();
+            }
+        }
+    }, [visible, productToEdit]);
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -68,7 +90,7 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
     };
 
     const handleSave = async () => {
-        if (!nombre || !precio || !imagen || !imagenAsset) {
+        if (!nombre || !precio || !imagen) {
             Alert.alert("Campos incompletos", "Por favor completa el nombre, precio y selecciona una imagen.");
             return;
         }
@@ -83,31 +105,37 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
             data.append('empresa_id', empresaId);
             data.append('descripcion', descripcion);
 
-            // Se usa el asset para obtener nombre y tipo real, evitando el error de validación en el backend
-            const fileToUpload = {
-                uri: imagenAsset.uri,
-                name: imagenAsset.fileName || `prod_${Date.now()}.jpg`,
-                type: imagenAsset.mimeType || 'image/jpeg',
-            };
+            if (imagenAsset) {
+                // Solo adjuntar imagen si se seleccionó una nueva
+                const fileToUpload = {
+                    uri: imagenAsset.uri,
+                    name: imagenAsset.fileName || `prod_${Date.now()}.jpg`,
+                    type: imagenAsset.mimeType || 'image/jpeg',
+                };
+                // @ts-ignore
+                data.append('imagen', fileToUpload);
+            }
 
-            // @ts-ignore
-            data.append('imagen', fileToUpload);
+            const method = productToEdit ? 'PUT' : 'POST';
+            const endpoint = productToEdit 
+                ? `${API_URL}/api/productos/${productToEdit.producto_id}`
+                : `${API_URL}/api/productos`;
 
-            const response = await fetch(`${API_URL}/api/productos`, {
-                method: 'POST',
+            const response = await fetch(endpoint, {
+                method: method,
                 headers: { 'Accept': 'application/json' },
                 body: data
             });
 
             if (response.ok) {
-                Alert.alert("Éxito", "Producto creado correctamente.");
+                Alert.alert("Éxito", `Producto ${productToEdit ? 'actualizado' : 'creado'} correctamente.`);
                 resetForm();
                 onSuccess();
                 onClose();
             } else {
                 const errText = await response.text();
                 console.error("Server Error:", errText);
-                Alert.alert("Error", "No se pudo crear el producto. Inténtalo de nuevo.");
+                Alert.alert("Error", `No se pudo ${productToEdit ? 'actualizar' : 'crear'} el producto. Inténtalo de nuevo.`);
             }
         } catch (error) {
             console.error("Network Error:", error);
@@ -134,7 +162,7 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
                 >
                     <View style={styles.modalContent}>
                         <View style={styles.header}>
-                            <Text style={styles.headerTitle}>NUEVO <Text style={{ color: COLORS.accent }}>PRODUCTO</Text></Text>
+                            <Text style={styles.headerTitle}>{productToEdit ? 'EDITAR' : 'NUEVO'} <Text style={{ color: COLORS.accent }}>PRODUCTO</Text></Text>
                             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                                 <Ionicons name="close" size={24} color={COLORS.textSec} />
                             </TouchableOpacity>
@@ -191,7 +219,7 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
                                 {isSaving ? (
                                     <ActivityIndicator color="#000" />
                                 ) : (
-                                    <Text style={styles.saveBtnText}>CREAR PRODUCTO</Text>
+                                    <Text style={styles.saveBtnText}>{productToEdit ? 'ACTUALIZAR' : 'CREAR'} PRODUCTO</Text>
                                 )}
                             </TouchableOpacity>
                         </ScrollView>

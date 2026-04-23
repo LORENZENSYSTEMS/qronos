@@ -231,6 +231,39 @@ export default function AdminDashboardScreen() {
     </View>
   );
 
+  const handleDeleteEmpresa = (id: number, nombre: string) => {
+    Alert.alert(
+      "Eliminar Empresa",
+      `¿Estás seguro de que deseas eliminar a "${nombre}"? Esta acción no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Eliminar", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              const response = await fetch(`${API_URL}/api/empresa/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${jwtState}` }
+              });
+
+              if (response.ok) {
+                Alert.alert("Éxito", "Empresa eliminada correctamente.");
+                fetchData();
+              } else {
+                const err = await response.json();
+                Alert.alert("Error", err.message || "No se pudo eliminar la empresa.");
+              }
+            } catch (error) {
+              console.error("Error al eliminar:", error);
+              Alert.alert("Error", "Error de conexión.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleRegistro = async () => {
     if (!formData.nombre || !formData.correo || !formData.password) {
       Alert.alert("Campos incompletos", "Por favor completa todos los campos obligatorios.");
@@ -357,9 +390,17 @@ export default function AdminDashboardScreen() {
                   <Text style={styles.empresaTitle} numberOfLines={1}>{emp.nombreCompleto}</Text>
                   <Text style={styles.empresaEmail} numberOfLines={1}>{emp.correo.toLowerCase()}</Text>
                 </View>
-                <View style={styles.statusBadge}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>LIVE</Text>
+                <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                  <View style={styles.statusBadge}>
+                    <View style={styles.statusDot} />
+                    <Text style={styles.statusText}>LIVE</Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={() => handleDeleteEmpresa(emp.empresa_id, emp.nombreCompleto)}
+                    style={styles.deleteBtn}
+                  >
+                    <Ionicons name="trash-outline" size={normalize(18)} color="#ff4444" />
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -551,6 +592,13 @@ const getResponsiveStyles = (width: number, topInset: number) => {
     },
     statusDot: { width: normalize(6), height: normalize(6), borderRadius: normalize(3), backgroundColor: COLORS.accent, marginRight: normalize(5) },
     statusText: { color: COLORS.accent, fontSize: normalize(9), fontFamily: FONTS.textBold },
+    deleteBtn: {
+      padding: normalize(6),
+      backgroundColor: 'rgba(255, 68, 68, 0.1)',
+      borderRadius: normalize(8),
+      borderWidth: 1,
+      borderColor: 'rgba(255, 68, 68, 0.2)'
+    },
 
     statsContainer: {
       flexDirection: 'row',

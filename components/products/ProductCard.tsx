@@ -24,6 +24,7 @@ interface ProductCardProps {
     descripcion?: string;
     imagenUrl?: string | null;
     onDeleteSuccess?: (id: number) => void; // Para modo Admin
+    onEdit?: () => void;                   // NUEVO: Para editar producto
     cantidad?: number;                     // Para modo Cliente/Carrito
     onAdd?: () => void;                    // Para modo Cliente/Carrito
     onRemove?: () => void;                 // Para modo Cliente/Carrito
@@ -37,6 +38,7 @@ export default function ProductCard({
     descripcion, 
     imagenUrl, 
     onDeleteSuccess,
+    onEdit,
     cantidad = 0,
     onAdd,
     onRemove,
@@ -120,6 +122,16 @@ export default function ProductCard({
                         )}
                     </TouchableOpacity>
                 )}
+
+                {/* NUEVO: Botón de editar (Solo si se pasa onEdit) */}
+                {onEdit && (
+                    <TouchableOpacity 
+                        style={styles.editButton} 
+                        onPress={onEdit}
+                    >
+                        <Ionicons name="pencil" size={18} color={COLORS.accent} />
+                    </TouchableOpacity>
+                )}
             </TouchableOpacity>
 
             <View style={styles.info}>
@@ -198,6 +210,17 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 8,
         right: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    editButton: {
+        position: 'absolute',
+        top: 8,
+        right: 48, // Al lado del de eliminar si ambos existen
         backgroundColor: 'rgba(0,0,0,0.6)',
         width: 32,
         height: 32,
