@@ -124,6 +124,7 @@ const CompanyProducts = ({
             key={item.producto_id}
             nombre={item.nombre}
             precio={item.precio}
+            descripcion={item.descripcion}
             imagenUrl={item.imagenUrl}
             cantidad={cart[item.producto_id]?.cantidad || 0}
             onAdd={() => onCartUpdate(item.producto_id, item, 1)}
@@ -250,7 +251,7 @@ export default function HomeScreen() {
     mensaje += `*PRODUCTOS:*\n`;
     
     cartArray.forEach(item => {
-      mensaje += `• (${item.cantidad}) ${item.nombre} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
+      mensaje += `• (${item.cantidad}) ${item.nombre}${item.descripcion ? ` - ${item.descripcion}` : ''} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
     });
 
     mensaje += `\n*RESUMEN DE CUENTA:*\n`;
