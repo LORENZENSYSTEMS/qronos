@@ -137,7 +137,7 @@ export default function ProductCard({
             <View style={styles.info}>
                 <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
                 {descripcion ? (
-                    <Text style={styles.descripcion} numberOfLines={1}>{descripcion}</Text>
+                    <Text style={styles.descripcion} numberOfLines={2}>{descripcion}</Text>
                 ) : null}
                 
                 <View style={styles.footer}>
@@ -240,7 +240,8 @@ const styles = StyleSheet.create({
     descripcion: {
         color: COLORS.textSec,
         fontFamily: FONTS.textRegular,
-        fontSize: 10,
+        fontSize: 11,
+        lineHeight: 14,
         marginBottom: 8,
     },
     footer: {

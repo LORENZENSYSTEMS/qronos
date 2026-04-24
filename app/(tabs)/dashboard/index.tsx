@@ -124,6 +124,7 @@ const CompanyProducts = ({
             key={item.producto_id}
             nombre={item.nombre}
             precio={item.precio}
+            descripcion={item.descripcion}
             imagenUrl={item.imagenUrl}
             cantidad={cart[item.producto_id]?.cantidad || 0}
             onAdd={() => onCartUpdate(item.producto_id, item, 1)}
