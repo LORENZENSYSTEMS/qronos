@@ -23,12 +23,12 @@ interface ProductCardProps {
     precio: number;
     descripcion?: string;
     imagenUrl?: string | null;
-    onDeleteSuccess?: (id: number) => void; // Para modo Admin
-    onEdit?: () => void;                   // NUEVO: Para editar producto
-    cantidad?: number;                     // Para modo Cliente/Carrito
-    onAdd?: () => void;                    // Para modo Cliente/Carrito
-    onRemove?: () => void;                 // Para modo Cliente/Carrito
-    onImagePress?: (url: string) => void;  // NUEVO: Para abrir la imagen en grande
+    onDeleteSuccess?: (id: number) => void;
+    onEdit?: () => void;
+    cantidad?: number;
+    onAdd?: () => void;
+    onRemove?: () => void;
+    onImagePress?: (url: string) => void;
 }
 
 export default function ProductCard({ 
@@ -46,6 +46,9 @@ export default function ProductCard({
 }: ProductCardProps) {
     const { width } = useWindowDimensions();
     const [isDeleting, setIsDeleting] = useState(false);
+    
+    // NUEVO ESTADO: Para controlar si la descripción está expandida o no
+    const [isExpanded, setIsExpanded] = useState(false);
 
     const getImageSource = (url?: string | null) => {
         if (!url) return { uri: 'https://via.placeholder.com/400x300.png?text=Producto' };
@@ -89,7 +92,6 @@ export default function ProductCard({
 
     return (
         <View style={[styles.card, cantidad > 0 && { borderColor: COLORS.accent }]}>
-            {/* NUEVO: TouchableOpacity rodeando la imagen para detectar el clic */}
             <TouchableOpacity 
                 activeOpacity={onImagePress ? 0.8 : 1}
                 onPress={() => onImagePress && imagenUrl && onImagePress(imagenUrl)}
@@ -101,14 +103,12 @@ export default function ProductCard({
                     resizeMode="cover"
                 />
                 
-                {/* Badge de cantidad seleccionada */}
                 {cantidad > 0 && (
                     <View style={styles.quantityBadge}>
                         <Text style={styles.quantityText}>{cantidad}</Text>
                     </View>
                 )}
 
-                {/* Botón de eliminar (Solo si se pasa onDeleteSuccess - Modo Admin) */}
                 {producto_id !== undefined && onDeleteSuccess && (
                     <TouchableOpacity 
                         style={styles.deleteButton} 
@@ -123,7 +123,6 @@ export default function ProductCard({
                     </TouchableOpacity>
                 )}
 
-                {/* NUEVO: Botón de editar (Solo si se pasa onEdit) */}
                 {onEdit && (
                     <TouchableOpacity 
                         style={styles.editButton} 
@@ -135,15 +134,45 @@ export default function ProductCard({
             </TouchableOpacity>
 
             <View style={styles.info}>
-                <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
-                {descripcion ? (
-                    <Text style={styles.descripcion} numberOfLines={2}>{descripcion}</Text>
-                ) : null}
+                {/* Contenedor superior para el texto */}
+                <View style={styles.textContainer}>
+                    <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
+                    
+                    {/* LÓGICA DE DESCRIPCIÓN Y LEER MÁS */}
+                    {descripcion ? (
+                        <View>
+                            <Text 
+                                style={styles.descripcion} 
+                                numberOfLines={isExpanded ? undefined : 3}
+                            >
+                                {descripcion}
+                            </Text>
+                            
+                            {/* Solo mostramos el botón si el texto es suficientemente largo */}
+                            {descripcion.length > 65 && (
+                                <TouchableOpacity 
+                                    onPress={() => setIsExpanded(!isExpanded)}
+                                    activeOpacity={0.7}
+                                    style={styles.readMoreBtn}
+                                >
+                                    <Text style={styles.readMoreText}>
+                                        {isExpanded ? 'Leer menos' : 'Leer más'}
+                                    </Text>
+                                    <Ionicons 
+                                        name={isExpanded ? "chevron-up" : "chevron-down"} 
+                                        size={12} 
+                                        color={COLORS.accent} 
+                                    />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    ) : null}
+                </View>
                 
+                {/* Contenedor inferior para precios y botones */}
                 <View style={styles.footer}>
                     <Text style={styles.precio}>${Number(precio).toLocaleString()}</Text>
                     
-                    {/* Controles de Carrito (Solo si se pasan onAdd/onRemove - Modo Cliente) */}
                     {onAdd && onRemove ? (
                         <View style={styles.cartControls}>
                             <TouchableOpacity onPress={onRemove} style={styles.controlBtn}>
@@ -175,8 +204,9 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.border,
         overflow: 'hidden',
-        width: 160, // Ancho fijo para el scroll horizontal del Dashboard
-        marginRight: 12,
+        width: 170,
+        minHeight: 220, 
+        marginRight: 16,
         elevation: 5,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
@@ -184,7 +214,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
     },
     imageContainer: {
-        height: 110,
+        height: 120, 
         width: '100%',
         backgroundColor: '#13151a',
     },
@@ -220,7 +250,7 @@ const styles = StyleSheet.create({
     editButton: {
         position: 'absolute',
         top: 8,
-        right: 48, // Al lado del de eliminar si ambos existen
+        right: 48,
         backgroundColor: 'rgba(0,0,0,0.6)',
         width: 32,
         height: 32,
@@ -230,19 +260,36 @@ const styles = StyleSheet.create({
     },
     info: {
         padding: 12,
+        flex: 1, 
+        justifyContent: 'space-between', 
+    },
+    textContainer: {
+        marginBottom: 10,
     },
     nombre: {
         color: COLORS.text,
         fontFamily: FONTS.textBold,
         fontSize: 13,
-        marginBottom: 2,
+        marginBottom: 4,
     },
     descripcion: {
-        color: COLORS.textSec,
+        color: '#a0aec0', 
         fontFamily: FONTS.textRegular,
         fontSize: 11,
-        lineHeight: 14,
-        marginBottom: 8,
+        lineHeight: 16, 
+    },
+    // ESTILOS NUEVOS PARA EL BOTÓN LEER MÁS
+    readMoreBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+        paddingVertical: 2,
+    },
+    readMoreText: {
+        color: COLORS.accent,
+        fontFamily: FONTS.textMedium,
+        fontSize: 10,
+        marginRight: 2,
     },
     footer: {
         flexDirection: 'row',
