@@ -51,16 +51,9 @@ const FONTS = {
 type Category = 'Todos' | 'Restaurantes' | 'Tiendas' | 'Bar' | string;
 const CATEGORIES: Category[] = ['Todos', 'Restaurantes', 'Bar', "Tiendas"];
 
-// --- NUEVA CONFIGURACIÓN DE PAÍSES Y CIUDADES CON BANDERAS ---
 const COUNTRIES_CONFIG: { [key: string]: { flag: string, cities: string[] } } = {
-  'Colombia': { 
-    flag: '🇨🇴', 
-    cities: ['Todas', 'Cartagena de Indias'] 
-  },
-  'Emiratos Árabes Unidos': { 
-    flag: '🇦🇪', 
-    cities: ['Todas', 'Dubái'] 
-  }
+  'Colombia': { flag: '🇨🇴', cities: ['Todas', 'Cartagena de Indias'] },
+  'Emiratos Árabes Unidos': { flag: '🇦🇪', cities: ['Todas', 'Dubái'] }
 };
 
 interface Lugar {
@@ -113,26 +106,23 @@ const CompanyProducts = ({
   }, [empresaId]);
 
   if (loading) return <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 30 }} />;
-  if (products.length === 0) return null;
+  if (products.length === 0) return <Text style={{color: COLORS.textSec, textAlign: 'center', marginTop: 40, fontFamily: FONTS.textMedium}}>No hay productos disponibles.</Text>;
 
   return (
-    <View style={{ marginVertical: 20 }}>
-      <Text style={styles.sectionTitle}>PRODUCTOS DISPONIBLES</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
-        {products.map((item) => (
-          <ProductCard 
-            key={item.producto_id}
-            nombre={item.nombre}
-            precio={item.precio}
-            descripcion={item.descripcion}
-            imagenUrl={item.imagenUrl}
-            cantidad={cart[item.producto_id]?.cantidad || 0}
-            onAdd={() => onCartUpdate(item.producto_id, item, 1)}
-            onRemove={() => onCartUpdate(item.producto_id, item, -1)}
-            onImagePress={() => item.imagenUrl ? onImagePress(item.imagenUrl) : null}
-          />
-        ))}
-      </ScrollView>
+    <View style={{ marginTop: 10, paddingBottom: 140 }}>
+      {products.map((item) => (
+        <ProductCard 
+          key={item.producto_id}
+          nombre={item.nombre}
+          precio={item.precio}
+          descripcion={item.descripcion}
+          imagenUrl={item.imagenUrl}
+          cantidad={cart[item.producto_id]?.cantidad || 0}
+          onAdd={() => onCartUpdate(item.producto_id, item, 1)}
+          onRemove={() => onCartUpdate(item.producto_id, item, -1)}
+          onImagePress={() => item.imagenUrl ? onImagePress(item.imagenUrl) : null}
+        />
+      ))}
     </View>
   );
 };
@@ -141,7 +131,6 @@ export default function HomeScreen() {
   const navigator: any = useNavigation();
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
-
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
@@ -156,6 +145,17 @@ export default function HomeScreen() {
   const [cart, setCart] = useState<Record<number, any>>({});
   const [viewerImage, setViewerImage] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('Usuario');
+  
+  const [selectedLugar, setSelectedLugar] = useState<Lugar | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<Category>('Todos');
+  const [selectedCountry, setSelectedCountry] = useState<string>('Colombia');
+  const [selectedCity, setSelectedCity] = useState<string>('Todas');
+  const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
+  const [isEmpresa, setIsEmpresa] = useState(false);
+  
+  // ESTADO NUEVO: Controla qué pantalla se muestra DENTRO del Modal Principal
+  const [modalScreen, setModalScreen] = useState<'detail' | 'menu'>('detail');
 
   const [fontsLoaded] = useFonts({
     'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
@@ -164,32 +164,19 @@ export default function HomeScreen() {
     'Poppins-Bold': require('../../../assets/fonts/Poppins-Bold.ttf'),
   });
 
-  const [selectedLugar, setSelectedLugar] = useState<Lugar | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<Category>('Todos');
-  const [selectedCountry, setSelectedCountry] = useState<string>('Colombia');
-  const [selectedCity, setSelectedCity] = useState<string>('Todas');
-  const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
-  const [isEmpresa, setIsEmpresa] = useState(false);
-
   useFocusEffect(
     useCallback(() => {
       const fetchUserData = async () => {
         const empresaId = await SecureStore.getItemAsync('empresa_id');
         setIsEmpresa(!!empresaId);
-        
         const name = await SecureStore.getItemAsync('nameCliente');
-        if (name) {
-          setUserName(name);
-        }
+        if (name) setUserName(name);
       };
       fetchUserData();
     }, [])
   );
 
-  const onRefresh = () => {
-    refetchStores();
-  };
+  const onRefresh = () => refetchStores();
 
   const filteredLugares = useMemo(() => {
     return lugares.filter(lugar => {
@@ -212,58 +199,49 @@ export default function HomeScreen() {
     setCart(prev => {
       const currentQty = prev[productId]?.cantidad || 0;
       const newQty = Math.max(0, currentQty + delta);
-      
       if (newQty === 0) {
         const { [productId]: _, ...rest } = prev;
         return rest;
       }
-      return {
-        ...prev,
-        [productId]: { ...product, cantidad: newQty }
-      };
+      return { ...prev, [productId]: { ...product, cantidad: newQty } };
     });
   };
 
+  // --- CÁLCULOS DEL TOTAL ---
+  const cartArray = Object.values(cart);
+  const subtotal = cartArray.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+  const descMatch = selectedLugar?.descuentos?.match(/\d+/);
+  const descPercent = descMatch ? parseInt(descMatch[0]) : 0;
+  const descuentoTotal = subtotal * (descPercent / 100);
+  const totalPagado = subtotal - descuentoTotal;
+
   const sendOrderWhatsApp = async (lugar: any) => {
-    const cartArray = Object.values(cart);
-    
-    // BLOQUEO: Solo se puede enviar WhatsApp si hay una orden
     if (cartArray.length === 0) {
-      Alert.alert("Carrito vacío", "Debes agregar al menos un producto al carrito para enviar una orden de compra.");
+      Alert.alert("Carrito vacío", "Debes agregar productos para enviar una orden.");
       return;
     }
-
     if (!lugar.whatsapp) {
-      Alert.alert("Aviso", "Esta empresa no ha registrado un número de contacto.");
+      Alert.alert("Aviso", "Esta empresa no ha registrado número de WhatsApp.");
       return;
     }
 
-    const subtotal = cartArray.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-    const descMatch = lugar.descuentos?.match(/\d+/);
-    const descPercent = descMatch ? parseInt(descMatch[0]) : 0;
-    const descuentoTotal = subtotal * (descPercent / 100);
-    const total = subtotal - descuentoTotal;
     const orderId = Math.floor(10000 + Math.random() * 90000);
-
-    let mensaje = `*ORDEN DESDE QRONNOS*\n`;
+    let mensaje = `*NUEVA ORDEN DESDE QRONNOS*\n`;
     mensaje += `👤 *Cliente:* ${userName}\n`;
     mensaje += `(ID: #${orderId})\n\n`;
-    mensaje += `*PRODUCTOS:*\n`;
-    
+    mensaje += `*PEDIDO:*\n`;
     cartArray.forEach(item => {
-      mensaje += `• (${item.cantidad}) ${item.nombre}${item.descripcion ? ` - ${item.descripcion}` : ''} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
+      mensaje += `• (${item.cantidad}) ${item.nombre} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
     });
-
-    mensaje += `\n*RESUMEN DE CUENTA:*\n`;
+    mensaje += `\n*RESUMEN:*\n`;
     mensaje += `• Subtotal: $${subtotal.toLocaleString()}\n`;
     if (descPercent > 0) {
       mensaje += `• Desc. Qronnos (${descPercent}%): -$${descuentoTotal.toLocaleString()}\n`;
     }
-    mensaje += `\n✅ *TOTAL A PAGAR: $${total.toLocaleString()}*`;
+    mensaje += `\n✅ *TOTAL A PAGAR: $${totalPagado.toLocaleString()}*`;
 
     const cleanPhone = lugar.whatsapp.replace(/[^\d]/g, '');
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(mensaje)}`;
-    
     const supported = await Linking.canOpenURL(url);
     if (supported) await Linking.openURL(url);
     else Alert.alert("Error", "No se pudo abrir WhatsApp.");
@@ -288,38 +266,31 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
 
-      {/* --- ENCABEZADO --- */}
+      {/* ENCABEZADO */}
       <View style={[styles.header, { paddingTop: Math.max(safeAreaInsets.top, 5) }]}>
         <View style={styles.headerRow}>
-          
           <Text style={styles.headerTitleLeft}>
             <Text style={{ color: COLORS.accent, textShadowColor: 'rgba(1, 195, 142, 0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }}>Q</Text>RONNOS
           </Text>
-
           <TouchableOpacity
             style={styles.locationSelectorBtn}
             onPress={() => setIsLocationMenuOpen(!isLocationMenuOpen)}
           >
             <Ionicons name="location-sharp" size={14} color={COLORS.accent} />
-            <Text style={styles.locationSelectorText} numberOfLines={1}>
-              {selectedCountry}, {selectedCity}
-            </Text>
+            <Text style={styles.locationSelectorText} numberOfLines={1}>{selectedCountry}, {selectedCity}</Text>
             <Ionicons name="chevron-down" size={12} color={COLORS.textSec} />
           </TouchableOpacity>
-          
         </View>
       </View>
 
-      {/* --- MENÚ DESPLEGABLE UNIFICADO --- */}
+      {/* MENÚ DESPLEGABLE UBICACIÓN */}
       {isLocationMenuOpen && (
         <View style={[styles.floatingDropdown, { top: Math.max(safeAreaInsets.top, 5) + 45, maxWidth: contentWidth }]}>
           <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
             <Text style={styles.dropdownHeaderLabel}>Selecciona tu ubicación</Text>
-            
             {Object.entries(COUNTRIES_CONFIG).map(([country, data]) => (
               <View key={country} style={{ marginBottom: 10 }}>
                 <Text style={styles.dropdownCountryText}>{country} {data.flag}</Text>
-                
                 {data.cities.map((city) => {
                   const isSelected = selectedCountry === country && selectedCity === city;
                   return (
@@ -332,9 +303,7 @@ export default function HomeScreen() {
                         setIsLocationMenuOpen(false);
                       }}
                     >
-                      <Text style={[styles.dropdownCityText, isSelected && styles.activeDropdownText]}>
-                        •  {city}
-                      </Text>
+                      <Text style={[styles.dropdownCityText, isSelected && styles.activeDropdownText]}>•  {city}</Text>
                       {isSelected && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
                     </TouchableOpacity>
                   );
@@ -348,9 +317,7 @@ export default function HomeScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { width: contentWidth, alignSelf: 'center' }]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />}
       >
         <View style={styles.categoriesContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
@@ -360,42 +327,34 @@ export default function HomeScreen() {
                 onPress={() => setSelectedCategory(cat)}
                 style={[styles.tabItem, selectedCategory === cat && styles.tabItemActive]}
               >
-                <Text style={[styles.tabText, selectedCategory === cat && styles.tabTextActive]}>
-                  {cat}
-                </Text>
+                <Text style={[styles.tabText, selectedCategory === cat && styles.tabTextActive]}>{cat}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
         <View style={styles.listContainer}>
-          <Text style={styles.resultsText}>
-            {filteredLugares.length} {filteredLugares.length === 1 ? 'Lugar exclusivo' : 'Lugares exclusivos'} encontrados
-          </Text>
+          <Text style={styles.resultsText}>{filteredLugares.length} {filteredLugares.length === 1 ? 'Lugar exclusivo' : 'Lugares exclusivos'} encontrados</Text>
 
           <View style={isTablet ? styles.tabletGridContainer : undefined}>
             {filteredLugares.map((lugar) => {
               const bgImage = lugar.img1 ? { uri: lugar.img1 } : getImageSource(lugar.imagen);
-
               return (
                 <TouchableOpacity
                   key={lugar.id}
-                  onPress={() => { setSelectedLugar(lugar); setModalVisible(true); setCart({}); setViewerImage(null); }}
+                  onPress={() => { 
+                    setSelectedLugar(lugar); 
+                    setModalScreen('detail'); // Restablecemos a detalle por defecto
+                    setModalVisible(true); 
+                    setCart({}); 
+                    setViewerImage(null); 
+                  }}
                   activeOpacity={0.9}
                   style={[styles.premiumCard, isTablet && styles.tabletCardItem]}
                 >
                   <View style={styles.cardHeaderWrapper}>
-                    <Image
-                      source={bgImage}
-                      style={[
-                        styles.cardAtmosphereImage,
-                        !lugar.img1 && { transform: [{ scale: 1.5 }], opacity: 0.15 }
-                      ]}
-                      resizeMode={lugar.img1 ? "cover" : "contain"}
-                      blurRadius={lugar.img1 ? 0 : 10}
-                    />
+                    <Image source={bgImage} style={[styles.cardAtmosphereImage, !lugar.img1 && { transform: [{ scale: 1.5 }], opacity: 0.15 }]} resizeMode={lugar.img1 ? "cover" : "contain"} blurRadius={lugar.img1 ? 0 : 10} />
                     <View style={styles.cardOverlay} />
-
                     <View style={styles.cardTopBadges}>
                       {lugar.descuentos && (
                         <View style={styles.promoBadge}>
@@ -410,50 +369,28 @@ export default function HomeScreen() {
 
                   <View style={styles.cardBody}>
                     <View style={styles.logoMedallion}>
-                      <Image
-                        source={getImageSource(lugar.imagen)}
-                        style={styles.logoImage}
-                        resizeMode="contain"
-                      />
+                      <Image source={getImageSource(lugar.imagen)} style={styles.logoImage} resizeMode="contain" />
                     </View>
-
                     <View style={styles.cardInfo}>
                       <Text style={styles.cardTitle}>{lugar.titulo}</Text>
-
                       <View style={styles.locationRow}>
                         <Ionicons name="location-sharp" size={12} color={COLORS.accent} />
                         <Text style={styles.cardLocation}>{lugar.ciudad} • {lugar.pais}</Text>
                       </View>
-
-                      <Text style={styles.cardDesc} numberOfLines={2}>
-                        {lugar.descripcion}
-                      </Text>
-
+                      <Text style={styles.cardDesc} numberOfLines={2}>{lugar.descripcion}</Text>
                       <View style={styles.cardFooterBtn}>
                         <Text style={styles.btnText}>Explorar</Text>
                         <Ionicons name="arrow-forward" size={14} color={COLORS.textSec} />
                       </View>
                     </View>
                   </View>
-
-                  <TouchableOpacity
-                    style={styles.favoriteBtn}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      toggleFavorite(lugar.id.toString());
-                    }}
-                  >
-                    <Ionicons
-                      name={isFavorite(lugar.id.toString()) ? "heart" : "heart-outline"}
-                      size={22}
-                      color={isFavorite(lugar.id.toString()) ? "#ff4d4f" : "#fff"}
-                    />
+                  <TouchableOpacity style={styles.favoriteBtn} onPress={(e) => { e.stopPropagation(); toggleFavorite(lugar.id.toString()); }}>
+                    <Ionicons name={isFavorite(lugar.id.toString()) ? "heart" : "heart-outline"} size={22} color={isFavorite(lugar.id.toString()) ? "#ff4d4f" : "#fff"} />
                   </TouchableOpacity>
                 </TouchableOpacity>
               )
             })}
           </View>
-
           {filteredLugares.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="planet-outline" size={40} color={COLORS.border} />
@@ -463,83 +400,107 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* --- MODAL DETALLE --- */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalContainer}>
-          <TouchableOpacity style={styles.modalBackdrop} onPress={() => setModalVisible(false)} />
+      {/* --- MODAL MAESTRO UNIFICADO --- */}
+      <Modal 
+        visible={modalVisible} 
+        transparent 
+        animationType="slide" 
+        onRequestClose={() => {
+          if (modalScreen === 'menu') {
+            setModalScreen('detail'); // Botón físico atrás de Android regresa al detalle
+          } else {
+            setModalVisible(false); // Cierra completamente
+          }
+        }}
+      >
+        {/* RENDERIZA EL DETALLE O EL MENÚ SEGÚN EL ESTADO */}
+        {modalScreen === 'detail' ? (
+          <View style={styles.modalContainer}>
+            <TouchableOpacity style={styles.modalBackdrop} onPress={() => setModalVisible(false)} />
 
-          <View style={[styles.modalCard, isTablet && styles.modalCardTablet]}>
-            <View style={styles.modalHeaderImageContainer}>
-              <TouchableOpacity 
-                activeOpacity={0.9}
-                style={{ flex: 1 }}
-                onPress={() => {
-                  const heroImg = selectedLugar?.img1 || selectedLugar?.imagen;
-                  if(heroImg) setViewerImage(heroImg);
-                }}
-              >
-                <Image
-                  source={selectedLugar?.img1 ? { uri: selectedLugar.img1 } : getImageSource(selectedLugar?.imagen)}
-                  style={styles.modalHeroImage}
-                  resizeMode="cover"
-                  blurRadius={selectedLugar?.img1 ? 0 : 20}
-                />
-              </TouchableOpacity>
-              <View style={styles.modalGradient} />
+            <View style={[styles.modalCard, isTablet && styles.modalCardTablet]}>
+              <View style={styles.modalHeaderImageContainer}>
+                <TouchableOpacity activeOpacity={0.9} style={{ flex: 1 }} onPress={() => { const heroImg = selectedLugar?.img1 || selectedLugar?.imagen; if(heroImg) setViewerImage(heroImg); }}>
+                  <Image source={selectedLugar?.img1 ? { uri: selectedLugar.img1 } : getImageSource(selectedLugar?.imagen)} style={styles.modalHeroImage} resizeMode="cover" blurRadius={selectedLugar?.img1 ? 0 : 20} />
+                </TouchableOpacity>
+                <View style={styles.modalGradient} />
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
+                  <Ionicons name="chevron-down" size={24} color="#FFF" />
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-                <Ionicons name="chevron-down" size={24} color="#FFF" />
+              <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                <View style={styles.modalLogoWrapper}>
+                  <Image source={getImageSource(selectedLugar?.imagen)} style={styles.modalLogo} resizeMode="contain" />
+                </View>
+
+                <Text style={styles.modalTitle}>{selectedLugar?.titulo}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 20 }}>
+                  <Text style={styles.modalSubtitle}>{selectedLugar?.categoria} • {selectedLugar?.ciudad}</Text>
+                </View>
+
+                {selectedLugar?.descuentos && !isEmpresa && (
+                  <TouchableOpacity style={styles.modalPromoBox} onPress={() => { setModalVisible(false); router.push('/(tabs)/dashboard/profileScreen' as any); }} activeOpacity={0.8}>
+                    <Ionicons name="star" size={20} color={COLORS.gold} />
+                    <View style={{ marginLeft: 10, flex: 1 }}>
+                      <Text style={styles.modalPromoTitle}>Beneficio Exclusivo</Text>
+                      <Text style={styles.modalPromoVal}>{selectedLugar.descuentos}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={COLORS.textSec} />
+                  </TouchableOpacity>
+                )}
+
+                <Text style={styles.sectionTitle}>SOBRE EL LUGAR</Text>
+                <Text style={styles.modalDesc}>{selectedLugar?.descripcion}</Text>
+
+                <TouchableOpacity onPress={() => handleOpenMaps(selectedLugar?.mapLink)} style={styles.mapBtn}>
+                  <Ionicons name="location" size={18} color={COLORS.accent} />
+                  <Text style={styles.mapBtnText}>Ver en Mapa</Text>
+                </TouchableOpacity>
+
+                {/* GALERÍA DE IMÁGENES */}
+                {(selectedLugar?.img1 || selectedLugar?.img2 || selectedLugar?.img3) && (
+                  <View style={{ marginVertical: 15 }}>
+                    <Text style={styles.sectionTitle}>GALERÍA</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      {[selectedLugar.img1, selectedLugar.img2, selectedLugar.img3].map((img, idx) => (
+                        img ? (
+                          <TouchableOpacity key={idx} onPress={() => setViewerImage(img)} activeOpacity={0.8}>
+                            <Image source={{ uri: img }} style={styles.galleryImg} />
+                          </TouchableOpacity>
+                        ) : null
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* BOTÓN VER MENÚ (CAMBIA LA VISTA DEL MODAL) */}
+                <TouchableOpacity 
+                  style={styles.btnVerMenu}
+                  activeOpacity={0.9}
+                  onPress={() => setModalScreen('menu')}
+                >
+                  <Ionicons name="restaurant" size={20} color={COLORS.background} />
+                  <Text style={styles.btnVerMenuText}>VER MENÚ DE PRODUCTOS</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.menuScreenContainer, { paddingTop: Math.max(safeAreaInsets.top, 5) }]}>
+            {/* HEADER DEL MENÚ */}
+            <View style={styles.menuHeader}>
+              <TouchableOpacity onPress={() => setModalScreen('detail')} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={24} color={COLORS.text} />
               </TouchableOpacity>
+              <View>
+                <Text style={styles.menuHeaderTitle}>Menú</Text>
+                <Text style={styles.menuHeaderSubtitle}>{selectedLugar?.titulo}</Text>
+              </View>
             </View>
 
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <View style={styles.modalLogoWrapper}>
-                <Image source={getImageSource(selectedLugar?.imagen)} style={styles.modalLogo} resizeMode="contain" />
-              </View>
-
-              <Text style={styles.modalTitle}>{selectedLugar?.titulo}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 20 }}>
-                <Text style={styles.modalSubtitle}>{selectedLugar?.categoria} • {selectedLugar?.ciudad}</Text>
-              </View>
-
-              {selectedLugar?.descuentos && !isEmpresa && (
-                <TouchableOpacity
-                  style={styles.modalPromoBox}
-                  onPress={() => {
-                    setModalVisible(false);
-                    router.push('/(tabs)/dashboard/profileScreen' as any);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="star" size={20} color={COLORS.gold} />
-                  <View style={{ marginLeft: 10, flex: 1 }}>
-                    <Text style={styles.modalPromoTitle}>Beneficio Exclusivo</Text>
-                    <Text style={styles.modalPromoVal}>{selectedLugar.descuentos}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.textSec} />
-                </TouchableOpacity>
-              )}
-
-              <Text style={styles.sectionTitle}>SOBRE EL LUGAR</Text>
-              <Text style={styles.modalDesc}>{selectedLugar?.descripcion}</Text>
-
-              {/* GALERÍA DE IMÁGENES CLICKABLES */}
-              {(selectedLugar?.img1 || selectedLugar?.img2 || selectedLugar?.img3) && (
-                <View style={{ marginVertical: 10 }}>
-                  <Text style={styles.sectionTitle}>GALERÍA</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {[selectedLugar.img1, selectedLugar.img2, selectedLugar.img3].map((img, idx) => (
-                      img ? (
-                        <TouchableOpacity key={idx} onPress={() => setViewerImage(img)} activeOpacity={0.8}>
-                          <Image source={{ uri: img }} style={styles.galleryImg} />
-                        </TouchableOpacity>
-                      ) : null
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* LISTA DE PRODUCTOS CON CONEXIÓN AL VISOR */}
+            {/* LISTA DE PRODUCTOS */}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
               {selectedLugar && (
                 <CompanyProducts 
                   empresaId={selectedLugar.id} 
@@ -548,52 +509,36 @@ export default function HomeScreen() {
                   onImagePress={(url) => setViewerImage(url)} 
                 />
               )}
-
-              <View style={styles.modalActionContainer}>
-                <TouchableOpacity
-                  onPress={() => handleOpenMaps(selectedLugar?.mapLink)}
-                  style={styles.mainActionBtn}
-                >
-                  <Text style={styles.mainActionBtnText}>Cómo llegar</Text>
-                  <Ionicons name="map" size={18} color={COLORS.background} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => sendOrderWhatsApp(selectedLugar)}
-                  style={[
-                    styles.whatsappActionBtn,
-                    Object.keys(cart).length > 0 && { width: 140, flexDirection: 'row', gap: 8 }
-                  ]}
-                >
-                  <Ionicons name="logo-whatsapp" size={24} color="#fff" />
-                  {Object.keys(cart).length > 0 && (
-                    <Text style={{ color: '#fff', fontFamily: FONTS.textBold, fontSize: 13 }}>PEDIR AHORA</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* --- VISOR DE IMAGEN (Overlay Absoluto DENTRO del Modal Principal) --- */}
-            {viewerImage && (
-              <View style={styles.fullScreenOverlay}>
-                <TouchableOpacity
-                  style={[styles.closeOverlayBtn, { top: Math.max(safeAreaInsets.top, 20) + 10 }]}
-                  onPress={() => setViewerImage(null)}
-                >
-                  <Ionicons name="close" size={36} color="#FFF" />
+            {/* FOOTER PEGAJOSO (CARRITO FLOTANTE) */}
+            {cartArray.length > 0 && (
+              <View style={styles.stickyBottomBar}>
+                <View style={styles.totalsContainer}>
+                    <Text style={styles.subtotalText}>Subtotal: ${subtotal.toLocaleString()}</Text>
+                    {descPercent > 0 && (
+                      <Text style={styles.discountText}>Desc. ({descPercent}%): -${descuentoTotal.toLocaleString()}</Text>
+                    )}
+                    <Text style={styles.totalText}>Total: ${totalPagado.toLocaleString()}</Text>
+                </View>
+                <TouchableOpacity style={styles.whatsappOrderBtn} onPress={() => sendOrderWhatsApp(selectedLugar)} activeOpacity={0.9}>
+                    <Ionicons name="logo-whatsapp" size={24} color="#FFF" />
+                    <Text style={styles.whatsappOrderBtnText}>PEDIR AHORA</Text>
                 </TouchableOpacity>
-                <Image
-                  source={{ uri: viewerImage }}
-                  style={{ width: '100%', height: '80%' }}
-                  resizeMode="contain"
-                />
               </View>
             )}
-
           </View>
-        </View>
+        )}
+
+        {/* OVERLAY DEL VISOR DE IMÁGENES (DENTRO DEL MODAL PRINCIPAL) */}
+        {viewerImage && (
+          <View style={styles.fullScreenOverlay}>
+            <TouchableOpacity style={[styles.closeOverlayBtn, { top: Math.max(safeAreaInsets.top, 20) + 10 }]} onPress={() => setViewerImage(null)}>
+              <Ionicons name="close" size={36} color="#FFF" />
+            </TouchableOpacity>
+            <Image source={{ uri: viewerImage }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />
+          </View>
+        )}
       </Modal>
     </SafeAreaView>
   );
@@ -604,16 +549,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scrollContent: { paddingBottom: 100 },
 
-  // NUEVO HEADER (En Fila)
+  // HEADER
   header: { backgroundColor: COLORS.background, paddingHorizontal: 24, paddingBottom: 10, zIndex: 10 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitleLeft: { fontFamily: FONTS.title, fontSize: 20, color: COLORS.text, letterSpacing: 1 },
 
-  // FILTERS (Países y Ciudades Unificados)
+  // DROPDOWN & FILTERS
   locationSelectorBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.cardBg, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, flexShrink: 1, maxWidth: '65%' },
   locationSelectorText: { color: COLORS.text, marginHorizontal: 6, fontSize: 11, fontFamily: FONTS.textMedium, flexShrink: 1 },
-
-  // DROPDOWNS UNIFICADO
   floatingDropdown: { position: 'absolute', left: 24, right: 24, backgroundColor: '#1a1d24', borderRadius: 16, padding: 8, zIndex: 100, borderWidth: 1, borderColor: COLORS.border, elevation: 20, alignSelf: 'center' },
   dropdownHeaderLabel: { fontSize: 10, color: COLORS.textSec, fontFamily: FONTS.textBold, paddingHorizontal: 12, paddingVertical: 8, textTransform: 'uppercase' },
   dropdownCountryText: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.textBold, paddingHorizontal: 12, marginTop: 8, marginBottom: 4 },
@@ -621,29 +564,18 @@ const styles = StyleSheet.create({
   dropdownCityText: { color: COLORS.textSec, fontSize: 13, fontFamily: FONTS.textRegular },
   activeDropdownText: { color: COLORS.accent, fontFamily: FONTS.textBold },
 
-  // CATEGORIES
   categoriesContainer: { marginTop: 10, marginBottom: 15 },
   tabItem: { marginRight: 15, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20, backgroundColor: COLORS.cardBg, borderWidth: 1, borderColor: COLORS.border },
   tabItemActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
   tabText: { fontSize: 13, color: COLORS.textSec, fontFamily: FONTS.textMedium },
   tabTextActive: { color: '#000', fontFamily: FONTS.textBold },
 
-  // LIST & GRID
   listContainer: { paddingHorizontal: 24 },
   resultsText: { color: COLORS.textSec, fontSize: 11, marginBottom: 20, fontFamily: FONTS.textMedium, opacity: 0.6, textAlign: 'center' },
   tabletGridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   tabletCardItem: { width: '48%' },
 
-  // --- PREMIUM CARD DESIGN ---
-  premiumCard: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 24,
-    marginBottom: 30,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#23262f',
-    width: '100%'
-  },
+  premiumCard: { backgroundColor: COLORS.cardBg, borderRadius: 24, marginBottom: 30, overflow: 'hidden', borderWidth: 1, borderColor: '#23262f', width: '100%' },
   cardHeaderWrapper: { height: 140, width: '100%', position: 'relative', backgroundColor: '#16181d', overflow: 'hidden' },
   cardAtmosphereImage: { width: '100%', height: '100%', opacity: 0.85 },
   cardOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.2)' },
@@ -654,12 +586,8 @@ const styles = StyleSheet.create({
   categoryBadgeText: { color: '#fff', fontSize: 10, fontFamily: FONTS.textBold, textTransform: 'uppercase', letterSpacing: 0.5 },
   favoriteBtn: { position: 'absolute', top: 15, right: 15, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
 
-  // CARD BODY
   cardBody: { paddingHorizontal: 20, paddingBottom: 24, marginTop: -40 },
-  logoMedallion: {
-    width: 80, height: 80, borderRadius: 25, backgroundColor: '#1E2129', justifyContent: 'center', alignItems: 'center',
-    alignSelf: 'flex-start', borderWidth: 4, borderColor: COLORS.cardBg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8, marginBottom: 12
-  },
+  logoMedallion: { width: 80, height: 80, borderRadius: 25, backgroundColor: '#1E2129', justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start', borderWidth: 4, borderColor: COLORS.cardBg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8, marginBottom: 12 },
   logoImage: { width: '85%', height: '85%' },
   cardInfo: {},
   cardTitle: { fontSize: 20, color: '#fff', fontFamily: FONTS.title, marginBottom: 6, letterSpacing: 0.5 },
@@ -668,11 +596,10 @@ const styles = StyleSheet.create({
   cardDesc: { fontSize: 13, color: '#8b9bb4', lineHeight: 20, fontFamily: FONTS.textRegular, marginBottom: 15 },
   cardFooterBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', borderBottomWidth: 1, borderBottomColor: COLORS.accent, paddingBottom: 2 },
   btnText: { color: '#fff', fontSize: 12, fontFamily: FONTS.textBold, marginRight: 6 },
-
   emptyState: { alignItems: 'center', marginTop: 40, opacity: 0.5 },
   emptyText: { color: COLORS.textSec, marginTop: 10, fontFamily: FONTS.textRegular },
 
-  // --- MODAL PREMIUM ---
+  // MODAL DETALLES EMPRESA
   modalContainer: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)' },
   modalCard: { height: '92%', width: '100%', backgroundColor: COLORS.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
@@ -683,10 +610,7 @@ const styles = StyleSheet.create({
   closeBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 20 },
 
   modalContent: { flex: 1, marginTop: -60, paddingHorizontal: 24 },
-  modalLogoWrapper: {
-    width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.background, alignSelf: 'center', justifyContent: 'center', alignItems: 'center',
-    marginBottom: 15, borderWidth: 4, borderColor: COLORS.background, shadowColor: "#000", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, elevation: 10
-  },
+  modalLogoWrapper: { width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.background, alignSelf: 'center', justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderWidth: 4, borderColor: COLORS.background, shadowColor: "#000", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, elevation: 10 },
   modalLogo: { width: 70, height: 70 },
   modalTitle: { fontSize: 28, color: COLORS.text, fontFamily: FONTS.title, textAlign: 'center', marginBottom: 5 },
   modalSubtitle: { fontSize: 14, color: COLORS.textSec, fontFamily: FONTS.textRegular, textAlign: 'center', opacity: 0.8 },
@@ -696,57 +620,34 @@ const styles = StyleSheet.create({
   modalPromoVal: { color: '#fff', fontSize: 16, fontFamily: FONTS.textMedium },
 
   sectionTitle: { fontSize: 11, color: COLORS.textSec, fontFamily: FONTS.textBold, letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' },
-  modalDesc: { fontSize: 15, color: '#ccc', lineHeight: 24, fontFamily: FONTS.textRegular, marginBottom: 30 },
+  modalDesc: { fontSize: 15, color: '#ccc', lineHeight: 24, fontFamily: FONTS.textRegular, marginBottom: 15 },
+  
+  mapBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: 'rgba(1, 195, 142, 0.1)', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, marginBottom: 30, borderWidth: 1, borderColor: 'rgba(1, 195, 142, 0.3)' },
+  mapBtnText: { color: COLORS.accent, fontFamily: FONTS.textMedium, fontSize: 12, marginLeft: 6 },
+  
   galleryImg: { width: 140, height: 90, borderRadius: 12, marginRight: 10, backgroundColor: '#222' },
 
-  // ACCIONES DEL MODAL
-  modalActionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 20,
-  },
-  mainActionBtn: {
-    flex: 1,
-    backgroundColor: COLORS.accent,
-    borderRadius: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 18,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    elevation: 8
-  },
-  whatsappActionBtn: {
-    width: 60,
-    height: 60,
-    backgroundColor: COLORS.whatsapp,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.whatsapp,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    elevation: 8
-  },
-  mainActionBtnText: { color: COLORS.background, fontFamily: FONTS.textBold, fontSize: 15, marginRight: 8 },
+  // BOTÓN VER MENÚ
+  btnVerMenu: { backgroundColor: COLORS.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, borderRadius: 16, marginTop: 10, marginBottom: 30, shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 5 },
+  btnVerMenuText: { color: COLORS.background, fontFamily: FONTS.textBold, fontSize: 14, marginLeft: 8, letterSpacing: 1 },
 
-  // VISOR DE IMÁGENES DENTRO DEL MODAL
-  fullScreenOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.96)',
-    zIndex: 9999,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeOverlayBtn: {
-    position: 'absolute',
-    right: 20,
-    zIndex: 10000,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    padding: 10,
-    borderRadius: 30,
-  }
+  // --- NUEVA PANTALLA: MODAL DEL MENÚ ---
+  menuScreenContainer: { flex: 1, backgroundColor: COLORS.background },
+  menuHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  backBtn: { padding: 10, marginRight: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14 },
+  menuHeaderTitle: { color: COLORS.text, fontFamily: FONTS.title, fontSize: 18 },
+  menuHeaderSubtitle: { color: COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 12 },
+
+  // VISOR DE IMÁGENES GLOBAL
+  fullScreenOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.96)', zIndex: 9999, justifyContent: 'center', alignItems: 'center' },
+  closeOverlayBtn: { position: 'absolute', right: 20, zIndex: 10000, backgroundColor: 'rgba(255,255,255,0.1)', padding: 10, borderRadius: 30 },
+
+  // FOOTER PEGAJOSO (STICKY BOTTOM BAR)
+  stickyBottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#12141A', borderTopWidth: 1, borderTopColor: '#2A2E39', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 20 },
+  totalsContainer: { flex: 1, justifyContent: 'center' },
+  subtotalText: { color: COLORS.textSec, fontFamily: FONTS.textMedium, fontSize: 12 },
+  discountText: { color: COLORS.gold, fontFamily: FONTS.textBold, fontSize: 12, marginVertical: 2 },
+  totalText: { color: COLORS.text, fontFamily: FONTS.textBold, fontSize: 16, marginTop: 2 },
+  whatsappOrderBtn: { backgroundColor: COLORS.whatsapp, flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 16, marginLeft: 16, shadowColor: COLORS.whatsapp, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 5, elevation: 5 },
+  whatsappOrderBtnText: { color: '#FFF', fontFamily: FONTS.textBold, fontSize: 13, marginLeft: 8 }
 });

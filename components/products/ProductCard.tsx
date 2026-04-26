@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Image, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const COLORS = {
     cardBg: '#181b21',
@@ -44,10 +44,7 @@ export default function ProductCard({
     onRemove,
     onImagePress 
 }: ProductCardProps) {
-    const { width } = useWindowDimensions();
     const [isDeleting, setIsDeleting] = useState(false);
-    
-    // NUEVO ESTADO: Para controlar si la descripción está expandida o no
     const [isExpanded, setIsExpanded] = useState(false);
 
     const getImageSource = (url?: string | null) => {
@@ -91,229 +88,214 @@ export default function ProductCard({
     };
 
     return (
-        <View style={[styles.card, cantidad > 0 && { borderColor: COLORS.accent }]}>
-            <TouchableOpacity 
-                activeOpacity={onImagePress ? 0.8 : 1}
-                onPress={() => onImagePress && imagenUrl && onImagePress(imagenUrl)}
-                style={styles.imageContainer}
-            >
-                <Image
-                    source={getImageSource(imagenUrl)}
-                    style={styles.image}
-                    resizeMode="cover"
-                />
-                
-                {cantidad > 0 && (
-                    <View style={styles.quantityBadge}>
-                        <Text style={styles.quantityText}>{cantidad}</Text>
-                    </View>
-                )}
-
-                {producto_id !== undefined && onDeleteSuccess && (
-                    <TouchableOpacity 
-                        style={styles.deleteButton} 
-                        onPress={handleDelete}
-                        disabled={isDeleting}
-                    >
-                        {isDeleting ? (
-                            <ActivityIndicator size="small" color="#ff4444" />
-                        ) : (
-                            <Ionicons name="trash" size={18} color="#ff4444" />
-                        )}
-                    </TouchableOpacity>
-                )}
-
-                {onEdit && (
-                    <TouchableOpacity 
-                        style={styles.editButton} 
-                        onPress={onEdit}
-                    >
-                        <Ionicons name="pencil" size={18} color={COLORS.accent} />
-                    </TouchableOpacity>
-                )}
-            </TouchableOpacity>
-
-            <View style={styles.info}>
-                {/* Contenedor superior para el texto */}
-                <View style={styles.textContainer}>
-                    <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
-                    
-                    {/* LÓGICA DE DESCRIPCIÓN Y LEER MÁS */}
-                    {descripcion ? (
-                        <View>
-                            <Text 
-                                style={styles.descripcion} 
-                                numberOfLines={isExpanded ? undefined : 3}
-                            >
-                                {descripcion}
-                            </Text>
-                            
-                            {/* Solo mostramos el botón si el texto es suficientemente largo */}
-                            {descripcion.length > 65 && (
-                                <TouchableOpacity 
-                                    onPress={() => setIsExpanded(!isExpanded)}
-                                    activeOpacity={0.7}
-                                    style={styles.readMoreBtn}
-                                >
-                                    <Text style={styles.readMoreText}>
-                                        {isExpanded ? 'Leer menos' : 'Leer más'}
-                                    </Text>
-                                    <Ionicons 
-                                        name={isExpanded ? "chevron-up" : "chevron-down"} 
-                                        size={12} 
-                                        color={COLORS.accent} 
-                                    />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                    ) : null}
+        <TouchableOpacity 
+            style={[styles.cardContainer, isExpanded && styles.cardContainerExpanded]} 
+            activeOpacity={0.9} 
+            onPress={() => setIsExpanded(!isExpanded)}
+        >
+            {/* VISTA CONTRAÍDA (FILA) */}
+            <View style={styles.rowLayout}>
+                <View style={styles.thumbnailContainer}>
+                    <Image source={getImageSource(imagenUrl)} style={styles.thumbnail} />
                 </View>
-                
-                {/* Contenedor inferior para precios y botones */}
-                <View style={styles.footer}>
-                    <Text style={styles.precio}>${Number(precio).toLocaleString()}</Text>
-                    
-                    {onAdd && onRemove ? (
-                        <View style={styles.cartControls}>
-                            <TouchableOpacity onPress={onRemove} style={styles.controlBtn}>
-                                <Ionicons name="remove-circle-outline" size={24} color={cantidad > 0 ? COLORS.accent : COLORS.border} />
-                            </TouchableOpacity>
-                            
-                            <Text style={[styles.qtyText, { color: cantidad > 0 ? COLORS.text : COLORS.textSec }]}>
-                                {cantidad}
-                            </Text>
 
-                            <TouchableOpacity onPress={onAdd} style={styles.controlBtn}>
-                                <Ionicons name="add-circle" size={24} color={COLORS.accent} />
+                <View style={styles.infoCol}>
+                    <Text style={styles.nombre} numberOfLines={2}>{nombre}</Text>
+                    {!isExpanded && descripcion && (
+                        <Text style={styles.shortDesc} numberOfLines={1}>{descripcion}</Text>
+                    )}
+                    <Text style={styles.precio}>${Number(precio).toLocaleString()}</Text>
+                </View>
+
+                {/* CONTROLES DE CARRITO U OPCIONES */}
+                <View style={styles.actionCol}>
+                    {onAdd && onRemove ? (
+                        cantidad === 0 ? (
+                            <TouchableOpacity style={styles.addBtn} onPress={onAdd}>
+                                <Ionicons name="add" size={20} color={COLORS.background} />
                             </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <Ionicons name="cart-outline" size={18} color={COLORS.textSec} />
+                        ) : (
+                            <View style={styles.cartControls}>
+                                <TouchableOpacity onPress={onRemove} style={styles.qtyBtn}>
+                                    <Ionicons name="remove" size={16} color={COLORS.text} />
+                                </TouchableOpacity>
+                                <Text style={styles.qtyText}>{cantidad}</Text>
+                                <TouchableOpacity onPress={onAdd} style={styles.qtyBtn}>
+                                    <Ionicons name="add" size={16} color={COLORS.text} />
+                                </TouchableOpacity>
+                            </View>
+                        )
+                    ) : null}
+
+                    {/* Botones de Admin */}
+                    {onEdit && (
+                        <TouchableOpacity style={[styles.adminBtn, { backgroundColor: COLORS.accent, marginTop: 8 }]} onPress={onEdit}>
+                            <Ionicons name="pencil" size={14} color={COLORS.background} />
+                        </TouchableOpacity>
+                    )}
+                    {producto_id !== undefined && onDeleteSuccess && (
+                        <TouchableOpacity style={[styles.adminBtn, { backgroundColor: '#ff4444', marginTop: 8 }]} onPress={handleDelete} disabled={isDeleting}>
+                            {isDeleting ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="trash" size={14} color="#fff" />}
+                        </TouchableOpacity>
                     )}
                 </View>
             </View>
-        </View>
+
+            {/* VISTA EXPANDIDA (FOTO GRANDE Y TEXTO COMPLETO) */}
+            {isExpanded && (
+                <View style={styles.expandedContent}>
+                    <TouchableOpacity 
+                        activeOpacity={onImagePress ? 0.8 : 1} 
+                        onPress={() => onImagePress && imagenUrl && onImagePress(imagenUrl)}
+                    >
+                        <Image source={getImageSource(imagenUrl)} style={styles.largeImage} />
+                    </TouchableOpacity>
+                    {descripcion && (
+                        <View style={styles.descBox}>
+                            <Text style={styles.sectionLabel}>Detalles del producto</Text>
+                            <Text style={styles.fullDesc}>{descripcion}</Text>
+                        </View>
+                    )}
+                </View>
+            )}
+        </TouchableOpacity>
     );
 }
 
 const styles = StyleSheet.create({
-    card: {
-        backgroundColor: COLORS.cardBg,
-        borderRadius: 20,
-        marginBottom: 16,
-        borderWidth: 1,
+    cardContainer: {
+        backgroundColor: COLORS.background,
+        borderBottomWidth: 1,
         borderColor: COLORS.border,
-        overflow: 'hidden',
-        width: 170,
-        minHeight: 220, 
-        marginRight: 16,
-        elevation: 5,
+        paddingVertical: 16,
+        paddingHorizontal: 8,
+        width: '100%',
+    },
+    cardContainerExpanded: {
+        backgroundColor: COLORS.cardBg,
+        borderRadius: 16,
+        borderBottomWidth: 0,
+        marginVertical: 8,
+        padding: 12,
+        elevation: 4,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
     },
-    imageContainer: {
-        height: 120, 
-        width: '100%',
-        backgroundColor: '#13151a',
+    rowLayout: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
-    image: {
+    thumbnailContainer: {
+        width: 70,
+        height: 70,
+        borderRadius: 12,
+        overflow: 'hidden',
+        backgroundColor: '#1E2129',
+    },
+    thumbnail: {
         width: '100%',
         height: '100%',
+        resizeMode: 'cover',
     },
-    quantityBadge: {
-        position: 'absolute',
-        top: 8,
-        left: 8,
-        backgroundColor: COLORS.accent,
-        borderRadius: 8,
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-    },
-    quantityText: {
-        color: '#000',
-        fontFamily: FONTS.textBold,
-        fontSize: 11,
-    },
-    deleteButton: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+    infoCol: {
+        flex: 1,
+        paddingHorizontal: 14,
         justifyContent: 'center',
-        alignItems: 'center',
-    },
-    editButton: {
-        position: 'absolute',
-        top: 8,
-        right: 48,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    info: {
-        padding: 12,
-        flex: 1, 
-        justifyContent: 'space-between', 
-    },
-    textContainer: {
-        marginBottom: 10,
     },
     nombre: {
         color: COLORS.text,
         fontFamily: FONTS.textBold,
-        fontSize: 13,
+        fontSize: 14,
         marginBottom: 4,
     },
-    descripcion: {
-        color: '#a0aec0', 
+    shortDesc: {
+        color: COLORS.textSec,
         fontFamily: FONTS.textRegular,
         fontSize: 11,
-        lineHeight: 16, 
-    },
-    // ESTILOS NUEVOS PARA EL BOTÓN LEER MÁS
-    readMoreBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 4,
-        paddingVertical: 2,
-    },
-    readMoreText: {
-        color: COLORS.accent,
-        fontFamily: FONTS.textMedium,
-        fontSize: 10,
-        marginRight: 2,
-    },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        marginBottom: 6,
     },
     precio: {
         color: COLORS.accent,
-        fontFamily: FONTS.textBold,
+        fontFamily: FONTS.textMedium,
         fontSize: 14,
+    },
+    actionCol: {
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        minWidth: 80,
+    },
+    addBtn: {
+        backgroundColor: COLORS.accent,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: COLORS.accent,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
     },
     cartControls: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: '#1E2129',
         borderRadius: 20,
         paddingHorizontal: 4,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: COLORS.border,
     },
-    controlBtn: {
-        padding: 2,
+    qtyBtn: {
+        width: 28,
+        height: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#2A2E39',
+        borderRadius: 14,
     },
     qtyText: {
+        color: COLORS.text,
         fontFamily: FONTS.textBold,
         fontSize: 13,
-        marginHorizontal: 8,
+        marginHorizontal: 12,
+    },
+    adminBtn: {
+        padding: 6,
+        borderRadius: 8,
+    },
+    expandedContent: {
+        marginTop: 16,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderColor: COLORS.border,
+    },
+    largeImage: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        resizeMode: 'cover',
+        marginBottom: 16,
+    },
+    descBox: {
+        backgroundColor: 'rgba(255,255,255,0.02)',
+        padding: 12,
+        borderRadius: 12,
+    },
+    sectionLabel: {
+        color: COLORS.accent,
+        fontFamily: FONTS.textBold,
+        fontSize: 10,
+        textTransform: 'uppercase',
+        marginBottom: 8,
+    },
+    fullDesc: {
+        color: '#E2E8F0',
+        fontFamily: FONTS.textRegular,
+        fontSize: 13,
+        lineHeight: 20,
     }
 });
