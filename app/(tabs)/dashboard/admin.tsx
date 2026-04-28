@@ -231,7 +231,8 @@ export default function AdminDashboardScreen() {
     </View>
   );
 
-  const handleDeleteEmpresa = (id: number, nombre: string) => {
+  // --- CAMBIO APLICADO: AHORA RECIBE EL CORREO PARA ELIMINAR ---
+  const handleDeleteEmpresa = (correo: string, nombre: string) => {
     Alert.alert(
       "Eliminar Empresa",
       `¿Estás seguro de que deseas eliminar a "${nombre}"? Esta acción no se puede deshacer.`,
@@ -242,7 +243,8 @@ export default function AdminDashboardScreen() {
           style: "destructive", 
           onPress: async () => {
             try {
-              const response = await fetch(`${API_URL}/api/empresa/${id}`, {
+              // Se actualizó el endpoint para usar el correo (encodeURIComponent por seguridad de la URL)
+              const response = await fetch(`${API_URL}/api/empresa/${encodeURIComponent(correo)}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${jwtState}` }
               });
@@ -395,8 +397,9 @@ export default function AdminDashboardScreen() {
                     <View style={styles.statusDot} />
                     <Text style={styles.statusText}>LIVE</Text>
                   </View>
+                  {/* CAMBIO APLICADO: AHORA ENVÍA EL CORREO A LA FUNCIÓN */}
                   <TouchableOpacity 
-                    onPress={() => handleDeleteEmpresa(emp.empresa_id, emp.nombreCompleto)}
+                    onPress={() => handleDeleteEmpresa(emp.correo, emp.nombreCompleto)}
                     style={styles.deleteBtn}
                   >
                     <Ionicons name="trash-outline" size={normalize(18)} color="#ff4444" />

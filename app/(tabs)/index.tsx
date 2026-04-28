@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'; // Importado para el icono del ojito
 import { CommonActions } from '@react-navigation/native';
 import { Camera } from 'expo-camera';
 import { useFonts } from 'expo-font';
@@ -11,18 +12,18 @@ import {
     ActivityIndicator,
     Alert,
     Animated,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
     StatusBar,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
-    useWindowDimensions,
-    KeyboardAvoidingView,
-    Platform,
     TouchableWithoutFeedback,
-    Keyboard,
-    ScrollView
+    View,
+    useWindowDimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from '../../src/firebaseConfig';
@@ -56,6 +57,7 @@ export default function HomeScreen() {
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false); // Estado para mostrar/ocultar contraseña
     const [isLoggingIn, setIsLoggingIn] = useState(false);
 
     // --- ESTADOS DE ANIMACIÓN ---
@@ -306,15 +308,25 @@ export default function HomeScreen() {
 
                                 <View style={styles.inputWrapper}>
                                     <Text style={styles.label}>CONTRASEÑA</Text>
-                                    <View style={styles.inputShadowContainer}>
+                                    <View style={[styles.inputShadowContainer, { flexDirection: 'row', alignItems: 'center' }]}>
                                         <TextInput
                                             placeholder="********"
                                             placeholderTextColor="rgba(255,255,255,0.2)"
                                             style={styles.TextInput}
                                             value={password}
                                             onChangeText={setPassword}
-                                            secureTextEntry={true}
+                                            secureTextEntry={!showPassword}
                                         />
+                                        <TouchableOpacity 
+                                            onPress={() => setShowPassword(!showPassword)}
+                                            style={{ paddingRight: 20 }}
+                                        >
+                                            <Ionicons 
+                                                name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                                                size={22} 
+                                                color={COLORS.textSec} 
+                                            />
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
 
