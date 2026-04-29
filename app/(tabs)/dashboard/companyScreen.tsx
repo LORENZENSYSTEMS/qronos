@@ -48,7 +48,8 @@ const VALID_CATEGORIES = ["Restaurantes", "Bar", "Tiendas"];
 
 // --- UBICACIONES DISPONIBLES ---
 const LOCATIONS = {
-    "Colombia": ["Cartagena de Indias"],
+    "Colombia": ["Cartagena de Indias", "Turbaco", "Puerto Colombia"],
+    "Venezuela": ["Ciudad Ojeda"],
     "Emiratos Árabes Unidos": ["Dubái"]
 };
 const COUNTRIES = Object.keys(LOCATIONS);

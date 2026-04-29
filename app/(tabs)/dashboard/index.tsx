@@ -52,7 +52,8 @@ type Category = 'Todos' | 'Restaurantes' | 'Tiendas' | 'Bar' | string;
 const CATEGORIES: Category[] = ['Todos', 'Restaurantes', 'Bar', "Tiendas"];
 
 const COUNTRIES_CONFIG: { [key: string]: { flag: string, cities: string[] } } = {
-  'Colombia': { flag: '🇨🇴', cities: ['Todas', 'Cartagena de Indias'] },
+  'Colombia': { flag: '🇨🇴', cities: ['Todas', 'Cartagena de Indias', 'Turbaco', 'Puerto Colombia'] },
+  'Venezuela': { flag: '🇻🇪', cities: ['Todas', 'Ciudad Ojeda'] },
   'Emiratos Árabes Unidos': { flag: '🇦🇪', cities: ['Todas', 'Dubái'] }
 };
 
