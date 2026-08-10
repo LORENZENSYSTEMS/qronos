@@ -6,6 +6,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 // --- PALETA DE COLORES (COPIADA DE DASHBOARD) ---
@@ -31,12 +33,17 @@ const FONTS = {
 type Category = 'Todos' | 'Restaurantes' | 'Tiendas' | 'Bar' | string;
 const CATEGORIES: Category[] = ['Todos', 'Restaurantes', 'Bar', "Tiendas"];
 
-const COUNTRIES_CONFIG: { [key: string]: string[] } = {
-    'Colombia': ['Todas', 'Cartagena', 'Barranquilla'],
-    'España': ['Todas', 'Madrid'],
-};
+interface PaisUbicacion {
+    id: number;
+    nombre: string;
+    codigo: string;
+}
 
-const COUNTRIES_LIST = Object.keys(COUNTRIES_CONFIG);
+interface CiudadUbicacion {
+    id: number;
+    nombre: string;
+    paisId: number;
+}
 
 interface Lugar {
     id: number;
@@ -76,6 +83,8 @@ export default function GuestIndex() {
     const [isCountryMenuOpen, setIsCountryMenuOpen] = useState(false);
     const [selectedCity, setSelectedCity] = useState<string>('Todas');
     const [isCityMenuOpen, setIsCityMenuOpen] = useState(false);
+    const [paisesUbicacion, setPaisesUbicacion] = useState<PaisUbicacion[]>([]);
+    const [ciudadesUbicacion, setCiudadesUbicacion] = useState<CiudadUbicacion[]>([]);
 
     const fetchLugares = async () => {
         try {
@@ -126,14 +135,47 @@ export default function GuestIndex() {
         fetchLugares();
     }, []);
 
+    useEffect(() => {
+        const fetchUbicaciones = async () => {
+            try {
+                const [paisesRes, ciudadesRes] = await Promise.all([
+                    fetch(`${API_URL}/api/paises`),
+                    fetch(`${API_URL}/api/ciudades`),
+                ]);
+
+                if (paisesRes.ok) {
+                    const data = await paisesRes.json();
+                    const lista = Array.isArray(data) ? data : (data.paises || []);
+                    const mapeados: PaisUbicacion[] = lista.map((p: any) => ({ id: p.pais_id, nombre: p.nombre, codigo: p.codigo || '' }));
+                    setPaisesUbicacion(mapeados);
+                    if (mapeados.length > 0) {
+                        setSelectedCountry(prev => (mapeados.some(p => p.nombre === prev) ? prev : mapeados[0].nombre));
+                    }
+                }
+
+                if (ciudadesRes.ok) {
+                    const data = await ciudadesRes.json();
+                    const lista = Array.isArray(data) ? data : (data.ciudades || []);
+                    setCiudadesUbicacion(lista.map((c: any) => ({ id: c.ciudad_id, nombre: c.nombre, paisId: c.pais_id })));
+                }
+            } catch (error) {
+                console.error("Error al obtener ubicaciones:", error);
+            }
+        };
+        fetchUbicaciones();
+    }, []);
+
     const onRefresh = () => {
         setRefreshing(true);
         fetchLugares();
     };
 
     const availableCities = useMemo(() => {
-        return COUNTRIES_CONFIG[selectedCountry] || ['Todas'];
-    }, [selectedCountry]);
+        const pais = paisesUbicacion.find(p => p.nombre === selectedCountry);
+        if (!pais) return ['Todas'];
+        const cities = ciudadesUbicacion.filter(c => c.paisId === pais.id).map(c => c.nombre);
+        return ['Todas', ...cities];
+    }, [selectedCountry, paisesUbicacion, ciudadesUbicacion]);
 
     const filteredLugares = useMemo(() => {
         return lugares.filter(lugar => {
@@ -237,18 +279,21 @@ export default function GuestIndex() {
             {isCountryMenuOpen && (
                 <View style={[styles.floatingDropdown, { top: safeAreaInsets.top + 110 }]}>
                     <Text style={styles.dropdownHeaderLabel}>Selecciona país</Text>
-                    {COUNTRIES_LIST.map((pais) => (
+                    {paisesUbicacion.map((pais) => (
                         <TouchableOpacity
-                            key={pais}
+                            key={pais.id}
                             style={styles.dropdownItem}
-                            onPress={() => handleCountryChange(pais)}
+                            onPress={() => handleCountryChange(pais.nombre)}
                         >
-                            <Text style={[styles.dropdownText, selectedCountry === pais && styles.activeDropdownText]}>
-                                {pais}
+                            <Text style={[styles.dropdownText, selectedCountry === pais.nombre && styles.activeDropdownText]}>
+                                {pais.nombre}{pais.codigo ? ` (${pais.codigo})` : ''}
                             </Text>
-                            {selectedCountry === pais && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
+                            {selectedCountry === pais.nombre && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
                         </TouchableOpacity>
                     ))}
+                    {paisesUbicacion.length === 0 && (
+                        <Text style={styles.dropdownHeaderLabel}>No hay países disponibles.</Text>
+                    )}
                 </View>
             )}
 

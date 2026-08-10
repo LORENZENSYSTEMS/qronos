@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -51,11 +51,19 @@ const FONTS = {
 type Category = 'Todos' | 'Restaurantes' | 'Tiendas' | 'Bar' | string;
 const CATEGORIES: Category[] = ['Todos', 'Restaurantes', 'Bar', "Tiendas"];
 
-const COUNTRIES_CONFIG: { [key: string]: { flag: string, cities: string[] } } = {
-  'Colombia': { flag: '🇨🇴', cities: ['Todas', 'Cartagena de Indias', 'Turbaco', 'Puerto Colombia'] },
-  'Venezuela': { flag: '🇻🇪', cities: ['Todas', 'Ciudad Ojeda'] },
-  'Emiratos Árabes Unidos': { flag: '🇦🇪', cities: ['Todas', 'Dubái'] }
-};
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+interface PaisUbicacion {
+  id: number;
+  nombre: string;
+  codigo: string;
+}
+
+interface CiudadUbicacion {
+  id: number;
+  nombre: string;
+  paisId: number;
+}
 
 interface Lugar {
   id: number;
@@ -152,6 +160,8 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState<Category>('Todos');
   const [selectedCountry, setSelectedCountry] = useState<string>('Colombia');
   const [selectedCity, setSelectedCity] = useState<string>('Todas');
+  const [paisesUbicacion, setPaisesUbicacion] = useState<PaisUbicacion[]>([]);
+  const [ciudadesUbicacion, setCiudadesUbicacion] = useState<CiudadUbicacion[]>([]);
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
   const [isEmpresa, setIsEmpresa] = useState(false);
   
@@ -176,6 +186,36 @@ export default function HomeScreen() {
       fetchUserData();
     }, [])
   );
+
+  useEffect(() => {
+    const fetchUbicaciones = async () => {
+      try {
+        const [paisesRes, ciudadesRes] = await Promise.all([
+          fetch(`${API_URL}/api/paises`),
+          fetch(`${API_URL}/api/ciudades`),
+        ]);
+
+        if (paisesRes.ok) {
+          const data = await paisesRes.json();
+          const lista = Array.isArray(data) ? data : (data.paises || []);
+          const mapeados: PaisUbicacion[] = lista.map((p: any) => ({ id: p.pais_id, nombre: p.nombre, codigo: p.codigo || '' }));
+          setPaisesUbicacion(mapeados);
+          if (mapeados.length > 0) {
+            setSelectedCountry(prev => (mapeados.some(p => p.nombre === prev) ? prev : mapeados[0].nombre));
+          }
+        }
+
+        if (ciudadesRes.ok) {
+          const data = await ciudadesRes.json();
+          const lista = Array.isArray(data) ? data : (data.ciudades || []);
+          setCiudadesUbicacion(lista.map((c: any) => ({ id: c.ciudad_id, nombre: c.nombre, paisId: c.pais_id })));
+        }
+      } catch (error) {
+        console.error("Error al obtener ubicaciones:", error);
+      }
+    };
+    fetchUbicaciones();
+  }, []);
 
   const onRefresh = () => refetchStores();
 
@@ -289,28 +329,37 @@ export default function HomeScreen() {
         <View style={[styles.floatingDropdown, { top: Math.max(safeAreaInsets.top, 5) + 45, maxWidth: contentWidth }]}>
           <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
             <Text style={styles.dropdownHeaderLabel}>Selecciona tu ubicación</Text>
-            {Object.entries(COUNTRIES_CONFIG).map(([country, data]) => (
-              <View key={country} style={{ marginBottom: 10 }}>
-                <Text style={styles.dropdownCountryText}>{country} {data.flag}</Text>
-                {data.cities.map((city) => {
-                  const isSelected = selectedCountry === country && selectedCity === city;
-                  return (
-                    <TouchableOpacity
-                      key={`${country}-${city}`}
-                      style={styles.dropdownCityItem}
-                      onPress={() => {
-                        setSelectedCountry(country);
-                        setSelectedCity(city);
-                        setIsLocationMenuOpen(false);
-                      }}
-                    >
-                      <Text style={[styles.dropdownCityText, isSelected && styles.activeDropdownText]}>•  {city}</Text>
-                      {isSelected && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
+            {paisesUbicacion.map((pais) => {
+              const cityList = ciudadesUbicacion.filter(c => c.paisId === pais.id);
+              const options = ['Todas', ...cityList.map(c => c.nombre)];
+              return (
+                <View key={pais.id} style={{ marginBottom: 10 }}>
+                  <Text style={styles.dropdownCountryText}>
+                    {pais.nombre}{pais.codigo ? ` (${pais.codigo})` : ''}
+                  </Text>
+                  {options.map((city) => {
+                    const isSelected = selectedCountry === pais.nombre && selectedCity === city;
+                    return (
+                      <TouchableOpacity
+                        key={`${pais.nombre}-${city}`}
+                        style={styles.dropdownCityItem}
+                        onPress={() => {
+                          setSelectedCountry(pais.nombre);
+                          setSelectedCity(city);
+                          setIsLocationMenuOpen(false);
+                        }}
+                      >
+                        <Text style={[styles.dropdownCityText, isSelected && styles.activeDropdownText]}>•  {city}</Text>
+                        {isSelected && <Ionicons name="checkmark" size={16} color={COLORS.accent} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+            {paisesUbicacion.length === 0 && (
+              <Text style={styles.dropdownHeaderLabel}>No hay ubicaciones disponibles.</Text>
+            )}
           </ScrollView>
         </View>
       )}

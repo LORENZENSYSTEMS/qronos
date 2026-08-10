@@ -189,7 +189,7 @@ export default function HomeScreen() {
         try {
             let expoToken = null;
             try {
-                const projectId = process.env.EXPO_PUBLIC_PROJECT_ID;
+                const projectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
                 if (projectId) {
                     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
                     expoToken = tokenData.data;
@@ -208,6 +208,7 @@ export default function HomeScreen() {
                 return;
             }
 
+            console.log(expoToken)
             const response = await fetch(LOGIN_CLIENTE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

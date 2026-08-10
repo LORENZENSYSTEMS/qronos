@@ -51,7 +51,7 @@ export default function RootLayout() {
       if (token) {
         console.log("Token para tu Backend (Expo):", token);
         fetchAndStoreToken(token);
-
+        
 
         // Aquí podrías llamar a tu backend: 
         // await fetch('tu-api.com/save-token', { method: 'POST', body: JSON.stringify({token}) });

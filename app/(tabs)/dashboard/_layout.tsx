@@ -158,6 +158,30 @@ export default function TabLayout() {
             />
 
             <Tabs.Screen
+                name="ubicaciones"
+                options={{
+                    title: 'Ubicaciones',
+                    tabBarLabel: 'Ubicaciones',
+                    href: !adminState ? null : undefined,
+                    tabBarIcon: ({ color, focused }) => (
+                        <Ionicons name={focused ? "location" : "location-outline"} size={normalize(22)} color={color} />
+                    ),
+                }}
+            />
+
+            <Tabs.Screen
+                name="catalogo"
+                options={{
+                    title: 'Catálogo',
+                    tabBarLabel: 'Catálogo',
+                    href: !adminState ? null : undefined,
+                    tabBarIcon: ({ color, focused }) => (
+                        <Ionicons name={focused ? "pricetags" : "pricetags-outline"} size={normalize(22)} color={color} />
+                    ),
+                }}
+            />
+
+            <Tabs.Screen
                 name="close"
                 options={{
                     title: 'Salir',

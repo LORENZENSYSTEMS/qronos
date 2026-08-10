@@ -31,9 +31,6 @@
         "android.permission.RECORD_AUDIO"
       ]
     },
-    "web": {
-      "output": "static"
-    },
     "plugins": [
       [
         "expo-camera",
