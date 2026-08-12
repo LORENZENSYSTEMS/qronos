@@ -43,16 +43,23 @@ const FONTS = {
     textBold: 'Poppins-Bold'
 };
 
-// --- CATEGORÍAS PERMITIDAS ---
-const VALID_CATEGORIES = ["Restaurantes", "Bar", "Tiendas"];
+// --- TIPOS DE CATÁLOGO DINÁMICO ---
+interface PaisUbicacion {
+    id: number;
+    nombre: string;
+    codigo: string;
+}
 
-// --- UBICACIONES DISPONIBLES ---
-const LOCATIONS = {
-    "Colombia": ["Cartagena de Indias", "Turbaco", "Puerto Colombia"],
-    "Venezuela": ["Ciudad Ojeda"],
-    "Emiratos Árabes Unidos": ["Dubái"]
-};
-const COUNTRIES = Object.keys(LOCATIONS);
+interface CiudadUbicacion {
+    id: number;
+    nombre: string;
+    paisId: number;
+}
+
+interface Categoria {
+    id: number;
+    nombre: string;
+}
 
 // --- HOOK DE AUTORIZACIÓN ---
 const useEmpresaCheck = () => {
@@ -108,6 +115,11 @@ export default function CompanyScreen() {
     const [totalScans, setTotalScans] = useState<number | null>(null);
     const [totalPoints, setTotalPoints] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+
+    // --- CATÁLOGO DINÁMICO (API) ---
+    const [categorias, setCategorias] = useState<Categoria[]>([]);
+    const [paises, setPaises] = useState<PaisUbicacion[]>([]);
+    const [ciudades, setCiudades] = useState<CiudadUbicacion[]>([]);
     
     // --- ESTADO PARA RECARGA ---
     const [refreshing, setRefreshing] = useState(false);
@@ -149,6 +161,33 @@ export default function CompanyScreen() {
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+            // 0. Cargar catálogo dinámico (categorías, países y ciudades)
+            const [categoriasRes, paisesRes, ciudadesRes] = await Promise.all([
+                fetch(`${API_URL}/api/categorias`),
+                fetch(`${API_URL}/api/paises`),
+                fetch(`${API_URL}/api/ciudades`),
+            ]);
+
+            let categoriasLista: Categoria[] = [];
+            if (categoriasRes.ok) {
+                const data = await categoriasRes.json();
+                const lista = Array.isArray(data) ? data : (data.categorias || []);
+                categoriasLista = lista.map((c: any) => ({ id: c.categoria_id, nombre: c.nombre }));
+                setCategorias(categoriasLista);
+            }
+
+            if (paisesRes.ok) {
+                const data = await paisesRes.json();
+                const lista = Array.isArray(data) ? data : (data.paises || []);
+                setPaises(lista.map((p: any) => ({ id: p.pais_id, nombre: p.nombre, codigo: p.codigo || '' })));
+            }
+
+            if (ciudadesRes.ok) {
+                const data = await ciudadesRes.json();
+                const lista = Array.isArray(data) ? data : (data.ciudades || []);
+                setCiudades(lista.map((c: any) => ({ id: c.ciudad_id, nombre: c.nombre, paisId: c.pais_id })));
+            }
+
             // 1. Cargar Métricas
             const responseMetricas = await fetch(`${API_URL}/api/metricas/empresa/${empresaId}`);
             const metricas = await responseMetricas.json();
@@ -168,7 +207,8 @@ export default function CompanyScreen() {
             if (responseEmpresa.ok) {
                 const data = await responseEmpresa.json();
                 const catFromBd = data.categoria;
-                const finalCat = VALID_CATEGORIES.includes(catFromBd) ? catFromBd : VALID_CATEGORIES[0];
+                const nombresCategorias = categoriasLista.map(c => c.nombre);
+                const finalCat = nombresCategorias.includes(catFromBd) ? catFromBd : (nombresCategorias[0] || 'Restaurantes');
 
                 setFormData({
                     descripcion: data.descripcion || '',
@@ -297,8 +337,10 @@ export default function CompanyScreen() {
         );
     }
 
-    // @ts-ignore
-    const availableCities = formData.pais && LOCATIONS[formData.pais] ? LOCATIONS[formData.pais] : [];
+    const selectedPais = paises.find(p => p.nombre === formData.pais);
+    const availableCities = selectedPais
+        ? ciudades.filter(c => c.paisId === selectedPais.id).map(c => c.nombre)
+        : [];
 
     return (
         <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
@@ -408,25 +450,28 @@ export default function CompanyScreen() {
 
                         <Text style={styles.label}>Categoría (Selecciona una)</Text>
                         <View style={[styles.categoryContainer, isSmallScreen && { flexWrap: 'wrap' }]}>
-                            {VALID_CATEGORIES.map((cat) => (
+                            {categorias.map((cat) => (
                                 <TouchableOpacity
-                                    key={cat}
+                                    key={cat.id}
                                     style={[
                                         styles.categoryChip,
-                                        formData.categoria === cat && styles.categoryChipActive,
+                                        formData.categoria === cat.nombre && styles.categoryChipActive,
                                         isSmallScreen && { minWidth: '45%' }
                                     ]}
-                                    onPress={() => setFormData({ ...formData, categoria: cat })}
+                                    onPress={() => setFormData({ ...formData, categoria: cat.nombre })}
                                 >
                                     <Text style={[
                                         styles.categoryChipText,
-                                        formData.categoria === cat && styles.categoryChipTextActive,
+                                        formData.categoria === cat.nombre && styles.categoryChipTextActive,
                                         isSmallScreen && { fontSize: 11 }
                                     ]}>
-                                        {cat}
+                                        {cat.nombre}
                                     </Text>
                                 </TouchableOpacity>
                             ))}
+                            {categorias.length === 0 && (
+                                <Text style={[styles.label, { textAlign: 'center', alignSelf: 'center', flex: 1 }]}>No hay categorías disponibles.</Text>
+                            )}
                         </View>
 
                         <Text style={styles.label}>Descripción</Text>
@@ -541,21 +586,24 @@ export default function CompanyScreen() {
                 <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCountryModalVisible(false)}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Selecciona el País</Text>
-                        {COUNTRIES.map(c => (
+                        {paises.map(p => (
                             <TouchableOpacity
-                                key={c}
+                                key={p.id}
                                 style={styles.modalOption}
                                 onPress={() => {
-                                    setFormData({ ...formData, pais: c, ciudad: '' });
+                                    setFormData({ ...formData, pais: p.nombre, ciudad: '' });
                                     setCountryModalVisible(false);
                                 }}
                             >
                                 <Text style={[
                                     styles.modalOptionText,
-                                    formData.pais === c && { color: COLORS.accent, fontFamily: FONTS.textBold }
-                                ]}>{c}</Text>
+                                    formData.pais === p.nombre && { color: COLORS.accent, fontFamily: FONTS.textBold }
+                                ]}>{p.nombre}{p.codigo ? ` (${p.codigo})` : ''}</Text>
                             </TouchableOpacity>
                         ))}
+                        {paises.length === 0 && (
+                            <Text style={[styles.modalOptionText, { paddingVertical: 15 }]}>No hay países disponibles.</Text>
+                        )}
                     </View>
                 </TouchableOpacity>
             </Modal>
@@ -580,6 +628,9 @@ export default function CompanyScreen() {
                                 ]}>{city}</Text>
                             </TouchableOpacity>
                         ))}
+                        {availableCities.length === 0 && (
+                            <Text style={[styles.modalOptionText, { paddingVertical: 15 }]}>No hay ciudades disponibles en este país.</Text>
+                        )}
                     </View>
                 </TouchableOpacity>
             </Modal>
