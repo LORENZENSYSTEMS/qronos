@@ -5,7 +5,6 @@ import * as Location from 'expo-location';
 import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useState } from "react";
-// Importamos Switch de react-native
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -132,6 +131,8 @@ export default function CompanyScreen() {
         descripcion: '',
         ubicacionMaps: '',
         whatsapp: '', 
+        instagram: '', // 👈 NUEVO CAMPO
+        sitioWeb: '',   // 👈 NUEVO CAMPO
         descuento: '',
         pais: '',
         ciudad: '',
@@ -240,6 +241,8 @@ export default function CompanyScreen() {
                     descripcion: data.descripcion || '',
                     ubicacionMaps: data.ubicacionMaps || '',
                     whatsapp: data.whatsapp || '', 
+                    instagram: data.instagram || '', // 👈 MAPEADO AQUÍ
+                    sitioWeb: data.sitioWeb || '',   // 👈 MAPEADO AQUÍ
                     descuento: data.descuento || '',
                     pais: data.pais || '',
                     ciudad: data.ciudad || '',
@@ -284,6 +287,8 @@ export default function CompanyScreen() {
             data.append('descripcion', formData.descripcion);
             data.append('ubicacionMaps', formData.ubicacionMaps);
             data.append('whatsapp', formData.whatsapp); 
+            data.append('instagram', formData.instagram); // 👈 ENVIANDO AL FORM DATA
+            data.append('sitioWeb', formData.sitioWeb);   // 👈 ENVIANDO AL FORM DATA
             data.append('descuento', formData.descuento);
             data.append('pais', formData.pais);
             data.append('ciudad', formData.ciudad);
@@ -655,6 +660,29 @@ export default function CompanyScreen() {
                             keyboardType="phone-pad"
                             value={formData.whatsapp}
                             onChangeText={(t) => setFormData({ ...formData, whatsapp: t })}
+                        />
+
+                        {/* --- NUEVOS CAMPOS: INSTAGRAM Y SITIO WEB --- */}
+                        <Text style={styles.label}>Link de Instagram</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Ej: https://instagram.com/tu_empresa"
+                            placeholderTextColor={COLORS.textSec}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                            value={formData.instagram}
+                            onChangeText={(t) => setFormData({ ...formData, instagram: t })}
+                        />
+
+                        <Text style={styles.label}>Sitio Web</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Ej: https://www.tuempresa.com"
+                            placeholderTextColor={COLORS.textSec}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                            value={formData.sitioWeb}
+                            onChangeText={(t) => setFormData({ ...formData, sitioWeb: t })}
                         />
                         
                         <Text style={styles.label}>Horario de Atención</Text>

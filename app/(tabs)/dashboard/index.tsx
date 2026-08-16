@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // --- COMPONENTES Y HOOKS ---
 import CompanyMap from '../../../components/maps/CompanyMap';
 import CompanyMenuModal from '../../../components/modals/companyMenuModal';
-import CompanyReservationModal from '../../../components/modals/companyReservationModal'; // <-- NUEVO MODAL DE RESERVAS
+import CompanyReservationModal from '../../../components/modals/companyReservationModal';
 import { useCompanies } from '../../../hooks/useCompanies';
 import { useFavorites } from '../../../hooks/useFavorites';
 
@@ -79,6 +79,8 @@ interface Lugar {
   descuentos?: string | null;
   mapLink?: string | null;
   whatsapp?: string | null; 
+  sitioWeb?: string | null;
+  instagram?: string | null;
   img1?: string | null;
   img2?: string | null;
   img3?: string | null;
@@ -120,7 +122,6 @@ export default function HomeScreen() {
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
   const [isEmpresa, setIsEmpresa] = useState(false);
   
-  // Modificamos para soportar la pantalla 'reservation'
   const [modalScreen, setModalScreen] = useState<'detail' | 'menu' | 'reservation'>('detail');
   const [cart, setCart] = useState<Record<number, any>>({});
 
@@ -192,64 +193,21 @@ export default function HomeScreen() {
     await Linking.openURL(mapLink);
   };
 
+  const handleOpenUrl = async (url?: string | null) => {
+    if (!url) {
+      Alert.alert("Aviso", "Enlace no disponible.");
+      return;
+    }
+    const formattedUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+    await Linking.openURL(formattedUrl);
+  };
+
   const openLugarFromMap = (lugar: any) => {
     setSelectedLugar(lugar);
     setModalScreen('detail');
     setModalVisible(true);
     setCart({});
     setViewerImage(null);
-  };
-
-  const handleCartUpdate = (productId: number, product: any, delta: number) => {
-    setCart(prev => {
-      const currentQty = prev[productId]?.cantidad || 0;
-      const newQty = Math.max(0, currentQty + delta);
-      if (newQty === 0) {
-        const { [productId]: _, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [productId]: { ...product, cantidad: newQty } };
-    });
-  };
-
-  // --- CÁLCULOS DEL TOTAL ---
-  const cartArray = Object.values(cart);
-  const subtotal = cartArray.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-  const descMatch = selectedLugar?.descuentos?.match(/\d+/);
-  const descPercent = descMatch ? parseInt(descMatch[0]) : 0;
-  const descuentoTotal = subtotal * (descPercent / 100);
-  const totalPagado = subtotal - descuentoTotal;
-
-  const sendOrderWhatsApp = async (lugar: any) => {
-    if (cartArray.length === 0) {
-      Alert.alert("Carrito vacío", "Debes agregar productos para enviar una orden.");
-      return;
-    }
-    if (!lugar.whatsapp) {
-      Alert.alert("Aviso", "Esta empresa no ha registrado número de WhatsApp.");
-      return;
-    }
-
-    const orderId = Math.floor(10000 + Math.random() * 90000);
-    let mensaje = `*NUEVA ORDEN DESDE QRONNOS*\n`;
-    mensaje += `👤 *Cliente:* ${userName}\n`;
-    mensaje += `(ID: #${orderId})\n\n`;
-    mensaje += `*PEDIDO:*\n`;
-    cartArray.forEach(item => {
-      mensaje += `• (${item.cantidad}) ${item.nombre} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
-    });
-    mensaje += `\n*RESUMEN:*\n`;
-    mensaje += `• Subtotal: $${subtotal.toLocaleString()}\n`;
-    if (descPercent > 0) {
-      mensaje += `• Desc. Qronnos (${descPercent}%): -$${descuentoTotal.toLocaleString()}\n`;
-    }
-    mensaje += `\n✅ *TOTAL A PAGAR: $${totalPagado.toLocaleString()}*`;
-
-    const cleanPhone = lugar.whatsapp.replace(/[^\d]/g, '');
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(mensaje)}`;
-    const supported = await Linking.canOpenURL(url);
-    if (supported) await Linking.openURL(url);
-    else Alert.alert("Error", "No se pudo abrir WhatsApp.");
   };
 
   const getImageSource = (img: string | null | undefined) => {
@@ -374,7 +332,7 @@ export default function HomeScreen() {
                     key={lugar.id}
                     onPress={() => {
                       setSelectedLugar(lugar);
-                      setModalScreen('detail'); // Restablecemos a detalle por defecto
+                      setModalScreen('detail');
                       setModalVisible(true);
                       setCart({});
                       setViewerImage(null);
@@ -410,7 +368,6 @@ export default function HomeScreen() {
                           <Text style={styles.cardLocation}>{lugar.ciudad} • {lugar.pais}</Text>
                         </View>
 
-                        {/* --- HORA EN QUE LA EMPRESA ESTÁ LABORANDO --- */}
                         <View style={styles.scheduleRow}>
                           <Ionicons name="time-outline" size={12} color={COLORS.textSec} />
                           <Text style={styles.cardSchedule}>
@@ -418,7 +375,6 @@ export default function HomeScreen() {
                           </Text>
                         </View>
 
-                        {/* --- FOOTER DE LA CARD CON BOTONES --- */}
                         <View style={styles.cardFooterRow}>
                           <View style={styles.verDetallesBtn}>
                             <Text style={styles.verDetallesText}>Ver detalles</Text>
@@ -426,7 +382,6 @@ export default function HomeScreen() {
                           </View>
 
                           <View style={styles.cardActionButtons}>
-                            {/* BOTÓN RESERVAR (CONDICIONAL) */}
                             {(lugar.mostrar_reservas || lugar.mostrarReservas) && (
                               <TouchableOpacity 
                                 style={styles.reservarMesaBtn}
@@ -442,7 +397,6 @@ export default function HomeScreen() {
                               </TouchableOpacity>
                             )}
 
-                            {/* BOTÓN DOMICILIO */}
                             <TouchableOpacity 
                               style={styles.pedirDomicilioBtn}
                               onPress={(e) => {
@@ -501,53 +455,102 @@ export default function HomeScreen() {
                   <Image source={selectedLugar?.img1 ? { uri: selectedLugar.img1 } : getImageSource(selectedLugar?.imagen)} style={styles.modalHeroImage} resizeMode="cover" blurRadius={selectedLugar?.img1 ? 0 : 20} />
                 </TouchableOpacity>
                 <View style={styles.modalGradient} />
-                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-                  <Ionicons name="chevron-down" size={24} color="#FFF" />
+                
+                {/* Botón Atrás */}
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.topBackBtn}>
+                  <Ionicons name="arrow-back" size={22} color="#FFF" />
+                </TouchableOpacity>
+
+                {/* Botón Favorito */}
+                <TouchableOpacity 
+                  style={styles.topFavoriteBtn} 
+                  onPress={() => selectedLugar && toggleFavorite(selectedLugar.id.toString())}
+                >
+                  <Ionicons 
+                    name={selectedLugar && isFavorite(selectedLugar.id.toString()) ? "heart" : "heart-outline"} 
+                    size={20} 
+                    color={selectedLugar && isFavorite(selectedLugar.id.toString()) ? "#ff4d4f" : "#fff"} 
+                  />
                 </TouchableOpacity>
               </View>
 
               <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+                {/* Logotipo Central */}
                 <View style={styles.modalLogoWrapper}>
                   <Image source={getImageSource(selectedLugar?.imagen)} style={styles.modalLogo} resizeMode="contain" />
                 </View>
 
+                {/* Título y Categoría */}
                 <Text style={styles.modalTitle}>{selectedLugar?.titulo}</Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 10 }}>
-                  <Text style={styles.modalSubtitle}>{selectedLugar?.categoria} • {selectedLugar?.ciudad}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 20 }}>
+                  <Text style={styles.modalSubtitle}>{selectedLugar?.categoria}  •  {selectedLugar?.ciudad}</Text>
                 </View>
 
-                {(selectedLugar?.horarioApertura || selectedLugar?.horarioCierre) && (
-                  <View style={styles.modalScheduleRow}>
-                    <Ionicons name="time-outline" size={14} color={COLORS.textSec} />
-                    <Text style={styles.modalScheduleText}>
-                      Horario: {selectedLugar?.horarioApertura || ''} {selectedLugar?.horarioApertura && selectedLugar?.horarioCierre ? '-' : ''} {selectedLugar?.horarioCierre || ''}
-                    </Text>
-                  </View>
-                )}
+                {/* FILA DE BOTONES: SITIO WEB | INSTAGRAM | MAPS */}
+                <View style={styles.actionRowContainer}>
+                  <TouchableOpacity 
+                    style={styles.actionIconButton}
+                    onPress={() => handleOpenUrl(selectedLugar?.sitioWeb)}
+                  >
+                    <Ionicons name="globe-outline" size={18} color="#fff" />
+                    <Text style={styles.actionIconText}>Sitio web</Text>
+                  </TouchableOpacity>
 
+                  <TouchableOpacity 
+                    style={styles.actionIconButton}
+                    onPress={() => {
+                      if (selectedLugar?.instagram) {
+                        const insta = selectedLugar.instagram.replace('@', '').trim();
+                        const url = selectedLugar.instagram.startsWith('http') ? selectedLugar.instagram : `https://instagram.com/${insta}`;
+                        Linking.openURL(url);
+                      } else {
+                        Alert.alert("Aviso", "Esta empresa no ha registrado su Instagram.");
+                      }
+                    }}
+                  >
+                    <Ionicons name="logo-instagram" size={18} color="#fff" />
+                    <Text style={styles.actionIconText}>Instagram</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={styles.actionIconButton}
+                    onPress={() => handleOpenMaps(selectedLugar?.mapLink)}
+                  >
+                    <Ionicons name="location-outline" size={18} color="#fff" />
+                    <Text style={styles.actionIconText}>Maps</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* HORA LABORAL (EXTRAÍDA DEL BACKEND) */}
+                <View style={styles.modalScheduleRowCenter}>
+                  <Ionicons name="time-outline" size={16} color={COLORS.textSec} />
+                  <Text style={styles.modalScheduleTextCenter}>
+                    {selectedLugar?.horarioCierre ? `Cierra ${selectedLugar.horarioCierre}` : `Horario: ${selectedLugar?.horarioApertura || '--:--'} - ${selectedLugar?.horarioCierre || '--:--'}`}
+                  </Text>
+                </View>
+
+                {/* SECCIÓN ACUMULA PUNTOS / BENEFICIO */}
                 {selectedLugar?.descuentos && !isEmpresa && (
                   <TouchableOpacity style={styles.modalPromoBox} onPress={() => { setModalVisible(false); router.push('/(tabs)/dashboard/profileScreen' as any); }} activeOpacity={0.8}>
-                    <Ionicons name="star" size={20} color={COLORS.gold} />
-                    <View style={{ marginLeft: 10, flex: 1 }}>
-                      <Text style={styles.modalPromoTitle}>Beneficio Exclusivo</Text>
-                      <Text style={styles.modalPromoVal}>{selectedLugar.descuentos}</Text>
+                    <View style={styles.qrIconBadge}>
+                      <Ionicons name="qr-code-outline" size={22} color={COLORS.accent} />
+                    </View>
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text style={styles.modalPromoTitle}>Acumula puntos</Text>
+                      <Text style={styles.modalPromoVal}>Escanea cada vez que compres dentro de la tienda y acumula puntos.</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={COLORS.textSec} />
                   </TouchableOpacity>
                 )}
 
+                {/* SOBRE EL LUGAR */}
                 <Text style={styles.sectionTitle}>SOBRE EL LUGAR</Text>
                 <Text style={styles.modalDesc}>{selectedLugar?.descripcion}</Text>
 
-                <TouchableOpacity onPress={() => handleOpenMaps(selectedLugar?.mapLink)} style={styles.mapBtn}>
-                  <Ionicons name="location" size={18} color={COLORS.accent} />
-                  <Text style={styles.mapBtnText}>Ver en Mapa</Text>
-                </TouchableOpacity>
-
-                {/* GALERÍA DE IMÁGENES */}
+                {/* GALERÍA DE IMÁGENES (EL LUGAR) */}
                 {(selectedLugar?.img1 || selectedLugar?.img2 || selectedLugar?.img3) && (
                   <View style={{ marginVertical: 15 }}>
-                    <Text style={styles.sectionTitle}>GALERÍA</Text>
+                    <Text style={styles.sectionTitle}>EL LUGAR</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       {[selectedLugar.img1, selectedLugar.img2, selectedLugar.img3].map((img, idx) => (
                         img ? (
@@ -560,31 +563,37 @@ export default function HomeScreen() {
                   </View>
                 )}
 
-                {/* BOTÓN RESERVAR ESPACIO (RENDERIZADO CONDICIONAL) */}
-                {(selectedLugar?.mostrar_reservas || selectedLugar?.mostrarReservas) && (
-                  <TouchableOpacity 
-                    style={styles.btnReservarEspacio}
-                    activeOpacity={0.9}
-                    onPress={() => setModalScreen('reservation')}
-                  >
-                    <Ionicons name="calendar" size={20} color="#000" />
-                    <Text style={styles.btnReservarEspacioText}>
-                      {selectedLugar?.tipo_reservas === 'Mesas' || selectedLugar?.tipoReservas === 'Mesas' ? 'RESERVAR MESA' :
-                       selectedLugar?.tipo_reservas === 'Canchas' || selectedLugar?.tipoReservas === 'Canchas' ? 'RESERVAR CANCHA' :
-                       'RESERVAR ESPACIO (MESAS / CANCHAS)'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                {/* BOTONES INFERIORES DE ACCIÓN */}
+                <View style={styles.modalBottomRow}>
+                  {(selectedLugar?.mostrar_reservas || selectedLugar?.mostrarReservas) && (
+                    <TouchableOpacity 
+                      style={styles.whatsappActionBtnOutline}
+                      activeOpacity={0.85}
+                      onPress={() => setModalScreen('reservation')}
+                    >
+                      <Ionicons name="logo-whatsapp" size={20} color={COLORS.whatsapp} />
+                      <View style={{ marginLeft: 8 }}>
+                        <Text style={styles.whatsappBtnTitleOutline}>
+                          {selectedLugar?.tipo_reservas === 'Canchas' || selectedLugar?.tipoReservas === 'Canchas' ? 'Reservar cancha' : 'Reservar mesa'}
+                        </Text>
+                        <Text style={styles.whatsappBtnSubtextOutline}>por WhatsApp</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
 
-                {/* BOTÓN VER MENÚ */}
-                <TouchableOpacity 
-                  style={styles.btnVerMenu}
-                  activeOpacity={0.9}
-                  onPress={() => setModalScreen('menu')}
-                >
-                  <Ionicons name="restaurant" size={20} color={COLORS.background} />
-                  <Text style={styles.btnVerMenuText}>VER MENÚ DE PRODUCTOS</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.whatsappActionBtnFilled, !(selectedLugar?.mostrar_reservas || selectedLugar?.mostrarReservas) && { flex: 1 }]}
+                    activeOpacity={0.85}
+                    onPress={() => setModalScreen('menu')}
+                  >
+                    <Ionicons name="logo-whatsapp" size={20} color="#000" />
+                    <View style={{ marginLeft: 8 }}>
+                      <Text style={styles.whatsappBtnTitleFilled}>Pedir domicilio</Text>
+                      <Text style={styles.whatsappBtnSubtextFilled}>por WhatsApp</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
               </ScrollView>
             </View>
           </View>
@@ -658,22 +667,17 @@ const styles = StyleSheet.create({
   cardTopBadges: { position: 'absolute', top: 15, left: 15, right: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   promoBadge: { backgroundColor: COLORS.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   promoText: { color: '#000', fontFamily: FONTS.textBold, fontSize: 10, textTransform: 'uppercase' },
-  topRightRow: { flexDirection: 'row', alignItems: 'center' },
   categoryBadge: { backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   categoryBadgeText: { color: '#fff', fontSize: 10, fontFamily: FONTS.textBold, textTransform: 'uppercase', letterSpacing: 0.5 },
-  favoriteBtnInline: { backgroundColor: 'rgba(0,0,0,0.6)', padding: 7, borderRadius: 20, marginLeft: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   favoriteBtn: { position: 'absolute', top: 15, right: 15, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
 
   cardBody: { paddingHorizontal: 20, paddingBottom: 20, marginTop: -40 },
-  logoMedallion: { width: 80, height: 80, borderRadius: 25, backgroundColor: '#1E2129', justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start', borderWidth: 4, borderColor: COLORS.cardBg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8, marginBottom: 12 },
+  logoMedallion: { width: 80, height: 80, borderRadius: 25, backgroundColor: '#1E2129', justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start', borderWidth: 4, borderColor: COLORS.cardBg, elevation: 8, marginBottom: 12 },
   logoImage: { width: '85%', height: '85%' },
   cardInfo: {},
   cardTitle: { fontSize: 20, color: '#fff', fontFamily: FONTS.title, marginBottom: 6, letterSpacing: 0.5 },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   cardLocation: { fontSize: 12, color: COLORS.textSec, fontFamily: FONTS.textRegular, marginLeft: 4 },
-  cardDesc: { fontSize: 13, color: '#8b9bb4', lineHeight: 20, fontFamily: FONTS.textRegular, marginBottom: 15 },
-  cardFooterBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', borderBottomWidth: 1, borderBottomColor: COLORS.accent, paddingBottom: 2 },
-  btnText: { color: '#fff', fontSize: 12, fontFamily: FONTS.textBold, marginRight: 6 },
   
   scheduleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   cardSchedule: { fontSize: 12, color: COLORS.textSec, fontFamily: FONTS.textRegular, marginLeft: 4 },
@@ -691,41 +695,52 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', marginTop: 40, opacity: 0.5 },
   emptyText: { color: COLORS.textSec, marginTop: 10, fontFamily: FONTS.textRegular },
 
+  // --- NUEVOS ESTILOS DEL MODAL (SEGÚN LA IMAGEN DE REFERENCIA) ---
   modalContainer: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)' },
-  modalCard: { height: '92%', width: '100%', backgroundColor: COLORS.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
-  modalCardTablet: { maxWidth: 600, height: '85%', borderRadius: 30, marginBottom: '5%' },
-  modalHeaderImageContainer: { height: 250, width: '100%', position: 'relative' },
+  modalCard: { height: '94%', width: '100%', backgroundColor: COLORS.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
+  modalCardTablet: { maxWidth: 600, height: '88%', borderRadius: 30, marginBottom: '4%' },
+  modalHeaderImageContainer: { height: 260, width: '100%', position: 'relative' },
   modalHeroImage: { width: '100%', height: '100%' },
-  modalGradient: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
-  closeBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 20 },
+  modalGradient: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
+  topBackBtn: { position: 'absolute', top: 20, left: 20, backgroundColor: 'rgba(0,0,0,0.5)', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
+  topFavoriteBtn: { position: 'absolute', top: 20, right: 20, backgroundColor: 'rgba(0,0,0,0.5)', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
 
-  modalContent: { flex: 1, marginTop: -60, paddingHorizontal: 24 },
-  modalLogoWrapper: { width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.background, alignSelf: 'center', justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderWidth: 4, borderColor: COLORS.background, shadowColor: "#000", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, elevation: 10 },
-  modalLogo: { width: 70, height: 70 },
-  modalTitle: { fontSize: 28, color: COLORS.text, fontFamily: FONTS.title, textAlign: 'center', marginBottom: 5 },
-  modalSubtitle: { fontSize: 14, color: COLORS.textSec, fontFamily: FONTS.textRegular, textAlign: 'center', opacity: 0.8 },
+  modalContent: { flex: 1, marginTop: -50, paddingHorizontal: 20 },
+  modalLogoWrapper: { width: 84, height: 84, borderRadius: 22, backgroundColor: '#13151a', alignSelf: 'center', justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 3, borderColor: COLORS.background, elevation: 10 },
+  modalLogo: { width: 60, height: 60, borderRadius: 12 },
+  modalTitle: { fontSize: 22, color: COLORS.text, fontFamily: FONTS.textBold, textAlign: 'center', marginBottom: 4, letterSpacing: 0.5 },
+  modalSubtitle: { fontSize: 13, color: COLORS.textSec, fontFamily: FONTS.textRegular, textAlign: 'center' },
 
-  modalScheduleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 15 },
-  modalScheduleText: { fontSize: 13, color: COLORS.textSec, fontFamily: FONTS.textMedium, marginLeft: 6 },
+  // Acciones (Sitio web, Instagram, Maps)
+  actionRowContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)', marginBottom: 16 },
+  actionIconButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10 },
+  actionIconText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.textMedium },
 
-  modalPromoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E222B', padding: 16, borderRadius: 16, marginBottom: 25, borderWidth: 1, borderColor: '#333' },
-  modalPromoTitle: { color: COLORS.gold, fontSize: 11, fontFamily: FONTS.textBold, textTransform: 'uppercase', marginBottom: 2 },
-  modalPromoVal: { color: '#fff', fontSize: 16, fontFamily: FONTS.textMedium },
+  // Hora laboral
+  modalScheduleRowCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20, gap: 6 },
+  modalScheduleTextCenter: { fontSize: 13, color: COLORS.accent, fontFamily: FONTS.textMedium },
 
-  sectionTitle: { fontSize: 11, color: COLORS.textSec, fontFamily: FONTS.textBold, letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' },
-  modalDesc: { fontSize: 15, color: '#ccc', lineHeight: 24, fontFamily: FONTS.textRegular, marginBottom: 15 },
+  // Promo / Puntos
+  modalPromoBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#13151a', padding: 14, borderRadius: 16, marginBottom: 25, borderWidth: 1, borderColor: '#1f2229' },
+  qrIconBadge: { width: 44, height: 44, borderRadius: 10, backgroundColor: 'rgba(1, 195, 142, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  modalPromoTitle: { color: '#fff', fontSize: 14, fontFamily: FONTS.textBold, marginBottom: 2 },
+  modalPromoVal: { color: COLORS.textSec, fontSize: 11, fontFamily: FONTS.textRegular, lineHeight: 15 },
+
+  sectionTitle: { fontSize: 11, color: COLORS.textSec, fontFamily: FONTS.textBold, letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' },
+  modalDesc: { fontSize: 13, color: '#9ca3af', lineHeight: 20, fontFamily: FONTS.textRegular, marginBottom: 25 },
   
-  mapBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', backgroundColor: 'rgba(1, 195, 142, 0.1)', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, marginBottom: 30, borderWidth: 1, borderColor: 'rgba(1, 195, 142, 0.3)' },
-  mapBtnText: { color: COLORS.accent, fontFamily: FONTS.textMedium, fontSize: 12, marginLeft: 6 },
-  
-  galleryImg: { width: 140, height: 90, borderRadius: 12, marginRight: 10, backgroundColor: '#222' },
+  galleryImg: { width: 160, height: 110, borderRadius: 14, marginRight: 12, backgroundColor: '#13151a' },
 
-  btnReservarEspacio: { backgroundColor: COLORS.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, borderRadius: 16, marginTop: 10, marginBottom: 12, shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 5 },
-  btnReservarEspacioText: { color: '#000', fontFamily: FONTS.textBold, fontSize: 14, marginLeft: 8, letterSpacing: 1 },
+  // Botones inferiores (Reservar / Pedir Domicilio)
+  modalBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 15, marginBottom: 20 },
+  whatsappActionBtnOutline: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 16, borderBottomWidth: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: '#13151a' },
+  whatsappBtnTitleOutline: { color: '#fff', fontFamily: FONTS.textBold, fontSize: 13 },
+  whatsappBtnSubtextOutline: { color: COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 10 },
 
-  btnVerMenu: { backgroundColor: '#1E2129', borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, borderRadius: 16, marginBottom: 30 },
-  btnVerMenuText: { color: COLORS.text, fontFamily: FONTS.textBold, fontSize: 14, marginLeft: 8, letterSpacing: 1 },
+  whatsappActionBtnFilled: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 16, backgroundColor: COLORS.accent },
+  whatsappBtnTitleFilled: { color: '#000', fontFamily: FONTS.textBold, fontSize: 13 },
+  whatsappBtnSubtextFilled: { color: '#000', opacity: 0.8, fontFamily: FONTS.textRegular, fontSize: 10 },
 
   fullScreenOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.96)', zIndex: 9999, justifyContent: 'center', alignItems: 'center' },
   closeOverlayBtn: { position: 'absolute', right: 20, zIndex: 10000, backgroundColor: 'rgba(255,255,255,0.1)', padding: 10, borderRadius: 30 },

@@ -13,6 +13,8 @@ export interface Lugar {
     descuentos?: string | null;
     mapLink?: string | null;
     whatsapp?: string | null;
+    instagram?: string | null; // 👈 NUEVO CAMPO
+    sitioWeb?: string | null;  // 👈 NUEVO CAMPO
     img1?: string | null;
     img2?: string | null;
     img3?: string | null;
@@ -64,6 +66,8 @@ const fetchCompanies = async (): Promise<Lugar[]> => {
         descuentos: item.descuento,
         mapLink: item.ubicacionMaps,
         whatsapp: item.whatsapp,
+        instagram: item.instagram, // 👈 NUEVO MAPEADO
+        sitioWeb: item.sitioWeb,   // 👈 NUEVO MAPEADO
         img1: item.fotoDescripcion1,
         img2: item.fotoDescripcion2,
         img3: item.fotoDescripcion3,
