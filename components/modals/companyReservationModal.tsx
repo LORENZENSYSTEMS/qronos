@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -12,6 +12,7 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CourtReservationStep from './courtReservationStep';
 
 interface CompanyReservationModalProps {
     empresa: any;
@@ -33,12 +34,10 @@ const getMonthCalendarGrid = () => {
 
     const days = [];
 
-    // Espacios vacíos para alinear el primer día de la semana
     for (let i = 0; i < startingDayIndex; i++) {
         days.push({ empty: true, id: `empty-${i}` });
     }
 
-    // Días del mes
     for (let i = 1; i <= totalDays; i++) {
         const loopDate = new Date(year, month, i);
         loopDate.setHours(0, 0, 0, 0);
@@ -62,49 +61,64 @@ const getMonthCalendarGrid = () => {
     return { monthName: monthName.charAt(0).toUpperCase() + monthName.slice(1), days };
 };
 
-const MILITARY_TIMES = [
-    '08:00', '09:00', '10:00', '11:00', '12:00', 
-    '13:00', '14:00', '15:00', '16:00', '17:00', 
-    '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'
-];
+const generateAvailableTimes = (horarioApertura?: string, horarioCierre?: string) => {
+    const parseHour = (timeStr?: string, defaultHour: number = 8) => {
+        if (!timeStr) return defaultHour;
+        const match = timeStr.match(/(\d{1,2}):\d{2}/);
+        return match ? parseInt(match[1], 10) : defaultHour;
+    };
+
+    const startHour = parseHour(horarioApertura, 8); 
+    const endHour = parseHour(horarioCierre, 22);
+
+    const times = [];
+    for (let i = startHour; i <= endHour; i++) {
+        const formattedTime = i < 10 ? `0${i}:00` : `${i}:00`;
+        times.push(formattedTime);
+    }
+    return times;
+};
 
 export default function CompanyReservationModal({ empresa, userName, onClose }: CompanyReservationModalProps) {
     const insets = useSafeAreaInsets();
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-    
-    const isSportsComplex = empresa?.categoria?.toLowerCase().includes('deporte') || 
-                            empresa?.titulo?.toLowerCase().includes('cancha') || false;
-
-    const [reservationType, setReservationType] = useState<'mesa' | 'cancha'>(isSportsComplex ? 'cancha' : 'mesa');
+    const [showCourtStep, setShowCourtStep] = useState<boolean>(false);
     
     const calendarData = getMonthCalendarGrid();
     const validFirstDay = calendarData.days.find(d => !d.empty && !d.isPast)?.dateString || new Date().toISOString().split('T')[0];
     
     const [selectedDate, setSelectedDate] = useState<string>(validFirstDay);
-    const [selectedTime, setSelectedTime] = useState<string>('18:00');
-    const [selectedEndTime, setSelectedEndTime] = useState<string>('19:00');
-    const [activeTimePicker, setActiveTimePicker] = useState<'start' | 'end' | null>(null);
-    
+    const [activeTimePicker, setActiveTimePicker] = useState<boolean>(false);
+
+    const availableTimes = useMemo(() => {
+        const apertura = empresa?.horarioApertura || empresa?.horario_apertura || '08:00';
+        const cierre = empresa?.horarioCierre || empresa?.horario_cierre || '22:00';
+        return generateAvailableTimes(apertura, cierre);
+    }, [empresa]);
+
+    const [selectedTime, setSelectedTime] = useState<string>(availableTimes.length > 0 ? availableTimes[0] : '18:00');
     const [numberOfPeople, setNumberOfPeople] = useState<number>(2);
     
     const [mesas, setMesas] = useState<any[]>([]);
+    const [reservadas, setReservadas] = useState<any[]>([]); 
     const [loadingMesas, setLoadingMesas] = useState<boolean>(false);
+    const [isValidating, setIsValidating] = useState<boolean>(false); 
     const [selectedMesa, setSelectedMesa] = useState<any>(null);
 
-    const [resourceDetail, setResourceDetail] = useState(isSportsComplex ? 'Cancha Sintética #1' : 'Mesa Estándar');
+    const [resourceDetail, setResourceDetail] = useState('Mesa Estándar');
     const [reservationNote, setReservationNote] = useState('');
 
     useEffect(() => {
-        if (reservationType === 'mesa') {
-            fetchMesas();
-        }
-    }, [reservationType]);
+        fetchMesas();
+        fetchReservas();
+    }, []);
 
     const fetchMesas = async () => {
         try {
             setLoadingMesas(true);
             const empresaId = empresa?.id || empresa?._id;
-            const response = await fetch(`http://192.168.68.106:3000/api/mesas/empresa/${empresaId}`);
+            const API_URL = process.env.EXPO_PUBLIC_API_URL;
+            const response = await fetch(`${API_URL}/api/mesas/empresa/${empresaId}`);
             const data = await response.json();
             const listaMesas = data.mesas || (Array.isArray(data) ? data : []);
             
@@ -125,6 +139,89 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
         }
     };
 
+    const fetchReservas = async () => {
+        try {
+            const empresaId = empresa?.id || empresa?._id;
+            const API_URL = process.env.EXPO_PUBLIC_API_URL;
+            const response = await fetch(`${API_URL}/api/mesas/reservas/empresa/${empresaId}`);
+            const data = await response.json();
+            setReservadas(data.reservas || (Array.isArray(data) ? data : []));
+        } catch (error) {
+            console.error("Error al cargar reservas:", error);
+        }
+    };
+
+    const reservasMesaActual = useMemo(() => {
+        if (!selectedMesa) return [];
+        
+        return reservadas.filter((res: any) => {
+            const resId = String(res.mesa_id || res.id_mesa || '').trim();
+            const resNombre = String(res.mesa_nombre || res.nombre_mesa || '').trim();
+            
+            const currentId = String(selectedMesa.mesa_id || selectedMesa.id || '').trim();
+            const currentNombre = String(selectedMesa.nombre || selectedMesa.numero || '').trim();
+
+            const matchById = currentId !== '' && resId !== '' && currentId === resId;
+            const matchByName = currentNombre !== '' && resNombre !== '' && currentNombre === resNombre;
+
+            return matchById || matchByName;
+        });
+    }, [reservadas, selectedMesa]);
+
+    useEffect(() => {
+        if (reservasMesaActual.length > 0) {
+            const isCurrentOccupied = reservasMesaActual.some(res => res.fecha === selectedDate && res.hora === selectedTime);
+            if (isCurrentOccupied) {
+                const firstFreeTime = availableTimes.find(time => 
+                    !reservasMesaActual.some(res => res.fecha === selectedDate && res.hora === time)
+                );
+                if (firstFreeTime) setSelectedTime(firstFreeTime);
+            }
+        }
+    }, [selectedMesa, selectedDate, reservasMesaActual, availableTimes]);
+
+    const handleNextStep = async () => {
+        if (step === 2) {
+            setIsValidating(true);
+            try {
+                const empresaId = empresa?.id || empresa?._id;
+                const API_URL = process.env.EXPO_PUBLIC_API_URL;
+                const response = await fetch(`${API_URL}/api/mesas/reservas/empresa/${empresaId}`);
+                const data = await response.json();
+                const reservasActuales = data.reservas || (Array.isArray(data) ? data : []);
+                setReservadas(reservasActuales); 
+
+                const isOccupied = reservasActuales.some((res: any) => {
+                    const resId = String(res.mesa_id || res.id_mesa || '').trim();
+                    const resNombre = String(res.mesa_nombre || res.nombre_mesa || '').trim();
+                    
+                    const currentId = String(selectedMesa?.mesa_id || selectedMesa?.id || '').trim();
+                    const currentNombre = String(selectedMesa?.nombre || selectedMesa?.numero || '').trim();
+
+                    const matchById = currentId !== '' && resId !== '' && currentId === resId;
+                    const matchByName = currentNombre !== '' && resNombre !== '' && currentNombre === resNombre;
+
+                    return (matchById || matchByName) && res.fecha === selectedDate && res.hora === selectedTime;
+                });
+
+                if (isOccupied) {
+                    Alert.alert(
+                        "Horario no disponible", 
+                        "La mesa seleccionada acaba de ser reservada para ese horario. Por favor, selecciona otra hora u otra mesa."
+                    );
+                    setIsValidating(false);
+                    return; 
+                }
+            } catch (error) {
+                console.error("Error verificando disponibilidad en el backend:", error);
+            } finally {
+                setIsValidating(false);
+            }
+        }
+        
+        setStep((step + 1) as any);
+    };
+
     const sendReservationWhatsApp = async () => {
         if (!empresa.whatsapp) {
             Alert.alert("Aviso", "Esta empresa no ha registrado número de WhatsApp.");
@@ -137,14 +234,9 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
         mensaje += `(ID Reserva: #${reservationId})\n\n`;
 
         mensaje += `📅 *Fecha:* ${selectedDate}\n`;
-        if (reservationType === 'cancha') {
-            mensaje += `⏰ *Hora de Llegada (24h):* ${selectedTime}\n`;
-            mensaje += `🏁 *Hora de Salida (24h):* ${selectedEndTime}\n`;
-        } else {
-            mensaje += `⏰ *Hora (24h):* ${selectedTime}\n`;
-        }
+        mensaje += `⏰ *Hora (24h):* ${selectedTime}\n`;
         mensaje += `👥 *Personas:* ${numberOfPeople}\n`;
-        mensaje += `📍 *Tipo:* ${reservationType === 'mesa' ? '🍽️ Reserva de Mesa' : '⚽ Reserva de Cancha'}\n`;
+        mensaje += `📍 *Tipo:* 🍽️ Reserva de Mesa\n`;
         mensaje += `📌 *Detalle:* ${resourceDetail}\n`;
 
         if (reservationNote.trim() !== '') {
@@ -159,6 +251,17 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
         if (supported) await Linking.openURL(url);
         else Alert.alert("Error", "No se pudo abrir WhatsApp.");
     };
+
+    if (showCourtStep) {
+        return (
+            <CourtReservationStep 
+                empresa={empresa} 
+                userName={userName} 
+                onBack={() => setShowCourtStep(false)} 
+                onClose={onClose} 
+            />
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -187,19 +290,19 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
 
                         <View style={styles.optionsRow}>
                             <TouchableOpacity 
-                                style={[styles.optionCard, reservationType === 'mesa' && styles.optionCardActive]}
-                                onPress={() => { setReservationType('mesa'); setResourceDetail('Mesa Estándar'); }}
+                                style={[styles.optionCard, styles.optionCardActive]}
+                                onPress={() => setStep(2)}
                             >
-                                <Ionicons name="restaurant" size={28} color={reservationType === 'mesa' ? '#01c38e' : '#9ca3af'} />
-                                <Text style={[styles.optionText, reservationType === 'mesa' && styles.optionTextActive]}>Mesa</Text>
+                                <Ionicons name="restaurant" size={28} color="#01c38e" />
+                                <Text style={[styles.optionText, styles.optionTextActive]}>Mesa</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity 
-                                style={[styles.optionCard, reservationType === 'cancha' && styles.optionCardActive]}
-                                onPress={() => { setReservationType('cancha'); setResourceDetail('Cancha Sintética #1'); }}
+                                style={styles.optionCard}
+                                onPress={() => setShowCourtStep(true)}
                             >
-                                <Ionicons name="football" size={28} color={reservationType === 'cancha' ? '#01c38e' : '#9ca3af'} />
-                                <Text style={[styles.optionText, reservationType === 'cancha' && styles.optionTextActive]}>Cancha</Text>
+                                <Ionicons name="football" size={28} color="#9ca3af" />
+                                <Text style={styles.optionText}>Cancha</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -212,42 +315,40 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
                         <Text style={styles.stepTitle}>Fecha, Horarios y Espacio</Text>
                         <Text style={styles.stepSubtitle}>Selecciona la fecha y detalles de tu reserva.</Text>
 
-                        {/* SELECCIÓN DE MESA (Si aplica) */}
-                        {reservationType === 'mesa' && (
-                            <View style={{ marginBottom: 20 }}>
-                                <Text style={styles.label}>Selecciona la Mesa Disponible</Text>
-                                {loadingMesas ? (
-                                    <View style={{ padding: 20, alignItems: 'center' }}>
-                                        <ActivityIndicator size="small" color="#01c38e" />
-                                        <Text style={{ color: '#9ca3af', marginTop: 8, fontSize: 12 }}>Cargando mesas...</Text>
-                                    </View>
-                                ) : mesas.length === 0 ? (
-                                    <Text style={{ color: '#9ca3af', fontSize: 13, fontStyle: 'italic' }}>No hay mesas disponibles registradas.</Text>
-                                ) : (
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarScroll}>
-                                        {mesas.map((mesa) => {
-                                            const mesaId = mesa.mesa_id || mesa.id;
-                                            const mesaNombre = mesa.nombre || mesa.numero;
-                                            const isSelected = selectedMesa?.mesa_id === mesaId || selectedMesa?.id === mesaId;
-                                            return (
-                                                <TouchableOpacity
-                                                    key={mesaId}
-                                                    style={[styles.mesaCard, isSelected && styles.mesaCardActive]}
-                                                    onPress={() => {
-                                                        setSelectedMesa(mesa);
-                                                        setResourceDetail(`Mesa #${mesaNombre} (${mesa.capacidad || 4} pers.)`);
-                                                    }}
-                                                >
-                                                    <Ionicons name="restaurant-outline" size={22} color={isSelected ? '#01c38e' : '#9ca3af'} />
-                                                    <Text style={[styles.mesaCardTitle, isSelected && styles.calendarTextActive]}>Mesa #{mesaNombre}</Text>
-                                                    <Text style={styles.mesaCardCap}>{mesa.capacidad || 4} pers.</Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </ScrollView>
-                                )}
-                            </View>
-                        )}
+                        {/* SELECCIÓN DE MESA */}
+                        <View style={{ marginBottom: 20 }}>
+                            <Text style={styles.label}>Selecciona la Mesa Disponible</Text>
+                            {loadingMesas ? (
+                                <View style={{ padding: 20, alignItems: 'center' }}>
+                                    <ActivityIndicator size="small" color="#01c38e" />
+                                    <Text style={{ color: '#9ca3af', marginTop: 8, fontSize: 12 }}>Cargando mesas...</Text>
+                                </View>
+                            ) : mesas.length === 0 ? (
+                                <Text style={{ color: '#9ca3af', fontSize: 13, fontStyle: 'italic' }}>No hay mesas disponibles registradas.</Text>
+                            ) : (
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarScroll}>
+                                    {mesas.map((mesa) => {
+                                        const mesaId = mesa.mesa_id || mesa.id;
+                                        const mesaNombre = mesa.nombre || mesa.numero;
+                                        const isSelected = selectedMesa?.mesa_id === mesaId || selectedMesa?.id === mesaId;
+                                        return (
+                                            <TouchableOpacity
+                                                key={mesaId}
+                                                style={[styles.mesaCard, isSelected && styles.mesaCardActive]}
+                                                onPress={() => {
+                                                    setSelectedMesa(mesa);
+                                                    setResourceDetail(`Mesa #${mesaNombre} (${mesa.capacidad || 4} pers.)`);
+                                                }}
+                                            >
+                                                <Ionicons name="restaurant-outline" size={22} color={isSelected ? '#01c38e' : '#9ca3af'} />
+                                                <Text style={[styles.mesaCardTitle, isSelected && styles.calendarTextActive]}>Mesa #{mesaNombre}</Text>
+                                                <Text style={styles.mesaCardCap}>{mesa.capacidad || 4} pers.</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            )}
+                        </View>
 
                         {/* CALENDARIO EN CUADRÍCULA MENSUAL */}
                         <Text style={styles.label}>Selecciona el Día</Text>
@@ -294,90 +395,49 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
                         </View>
                         <Text style={styles.selectedDateInfo}>Fecha seleccionada: <Text style={styles.bold}>{selectedDate}</Text></Text>
 
-                        {/* HORA DE LLEGADA / SALIDA */}
-                        {reservationType === 'cancha' ? (
-                            <View style={{ marginBottom: 15 }}>
-                                <Text style={styles.label}>Hora de Llegada (Formato 24h)</Text>
-                                <TouchableOpacity 
-                                    style={styles.timeDropdownSelector}
-                                    onPress={() => setActiveTimePicker(activeTimePicker === 'start' ? null : 'start')}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Ionicons name="time-outline" size={18} color="#01c38e" style={{ marginRight: 8 }} />
-                                        <Text style={styles.timeDropdownText}>{selectedTime} Hrs</Text>
-                                    </View>
-                                    <Ionicons name={activeTimePicker === 'start' ? "chevron-up" : "chevron-down"} size={18} color="#9ca3af" />
-                                </TouchableOpacity>
+                        {/* HORA DE RESERVA */}
+                        <View style={{ marginBottom: 15 }}>
+                            <Text style={styles.label}>Hora de Reserva (Formato 24h)</Text>
+                            <TouchableOpacity 
+                                style={styles.timeDropdownSelector}
+                                onPress={() => setActiveTimePicker(!activeTimePicker)}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="time-outline" size={18} color="#01c38e" style={{ marginRight: 8 }} />
+                                    <Text style={styles.timeDropdownText}>{selectedTime} Hrs</Text>
+                                </View>
+                                <Ionicons name={activeTimePicker ? "chevron-up" : "chevron-down"} size={18} color="#9ca3af" />
+                            </TouchableOpacity>
 
-                                {activeTimePicker === 'start' && (
-                                    <View style={styles.timeDropdownGrid}>
-                                        {MILITARY_TIMES.map((time) => (
-                                            <TouchableOpacity
-                                                key={`start-${time}`}
-                                                style={[styles.timeOptionItem, selectedTime === time && styles.timeOptionItemActive]}
-                                                onPress={() => { setSelectedTime(time); setActiveTimePicker(null); }}
-                                            >
-                                                <Text style={[styles.timeOptionText, selectedTime === time && styles.timeOptionTextActive]}>{time}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                )}
+                            {activeTimePicker && (
+                                <View style={styles.timeDropdownGrid}>
+                                    {availableTimes.map((time) => {
+                                        const isOccupied = reservasMesaActual.some((res: any) => {
+                                            return res.fecha === selectedDate && res.hora === time;
+                                        });
 
-                                <Text style={[styles.label, { marginTop: 10 }]}>Hora de Salida (Formato 24h)</Text>
-                                <TouchableOpacity 
-                                    style={styles.timeDropdownSelector}
-                                    onPress={() => setActiveTimePicker(activeTimePicker === 'end' ? null : 'end')}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Ionicons name="time-outline" size={18} color="#01c38e" style={{ marginRight: 8 }} />
-                                        <Text style={styles.timeDropdownText}>{selectedEndTime} Hrs</Text>
-                                    </View>
-                                    <Ionicons name={activeTimePicker === 'end' ? "chevron-up" : "chevron-down"} size={18} color="#9ca3af" />
-                                </TouchableOpacity>
-
-                                {activeTimePicker === 'end' && (
-                                    <View style={styles.timeDropdownGrid}>
-                                        {MILITARY_TIMES.map((time) => (
-                                            <TouchableOpacity
-                                                key={`end-${time}`}
-                                                style={[styles.timeOptionItem, selectedEndTime === time && styles.timeOptionItemActive]}
-                                                onPress={() => { setSelectedEndTime(time); setActiveTimePicker(null); }}
-                                            >
-                                                <Text style={[styles.timeOptionText, selectedEndTime === time && styles.timeOptionTextActive]}>{time}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                )}
-                            </View>
-                        ) : (
-                            <View style={{ marginBottom: 15 }}>
-                                <Text style={styles.label}>Hora de Reserva (Formato 24h)</Text>
-                                <TouchableOpacity 
-                                    style={styles.timeDropdownSelector}
-                                    onPress={() => setActiveTimePicker(activeTimePicker === 'start' ? null : 'start')}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Ionicons name="time-outline" size={18} color="#01c38e" style={{ marginRight: 8 }} />
-                                        <Text style={styles.timeDropdownText}>{selectedTime} Hrs</Text>
-                                    </View>
-                                    <Ionicons name={activeTimePicker === 'start' ? "chevron-up" : "chevron-down"} size={18} color="#9ca3af" />
-                                </TouchableOpacity>
-
-                                {activeTimePicker === 'start' && (
-                                    <View style={styles.timeDropdownGrid}>
-                                        {MILITARY_TIMES.map((time) => (
+                                        return (
                                             <TouchableOpacity
                                                 key={`mesa-${time}`}
-                                                style={[styles.timeOptionItem, selectedTime === time && styles.timeOptionItemActive]}
-                                                onPress={() => { setSelectedTime(time); setActiveTimePicker(null); }}
+                                                style={[
+                                                    styles.timeOptionItem, 
+                                                    selectedTime === time && styles.timeOptionItemActive,
+                                                    isOccupied && styles.timeOptionItemDisabled 
+                                                ]}
+                                                disabled={isOccupied} 
+                                                onPress={() => { setSelectedTime(time); setActiveTimePicker(false); }}
                                             >
-                                                <Text style={[styles.timeOptionText, selectedTime === time && styles.timeOptionTextActive]}>{time}</Text>
+                                                <Text style={[
+                                                    styles.timeOptionText, 
+                                                    selectedTime === time && styles.timeOptionTextActive,
+                                                    isOccupied && styles.timeOptionTextDisabled
+                                                ]}>{time}</Text>
                                             </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                )}
-                            </View>
-                        )}
+                                        );
+                                    })}
+                                </View>
+                            )}
+                        </View>
 
                         {/* NÚMERO DE PERSONAS */}
                         <Text style={styles.label}>Número de personas</Text>
@@ -434,16 +494,9 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
 
                         <View style={styles.summaryCard}>
                             <Text style={styles.summaryRow}>📅 Fecha: <Text style={styles.bold}>{selectedDate}</Text></Text>
-                            {reservationType === 'cancha' ? (
-                                <>
-                                    <Text style={styles.summaryRow}>⏰ Hora de Llegada (24h): <Text style={styles.bold}>{selectedTime}</Text></Text>
-                                    <Text style={styles.summaryRow}>🏁 Hora de Salida (24h): <Text style={styles.bold}>{selectedEndTime}</Text></Text>
-                                </>
-                            ) : (
-                                <Text style={styles.summaryRow}>⏰ Hora (24h): <Text style={styles.bold}>{selectedTime}</Text></Text>
-                            )}
+                            <Text style={styles.summaryRow}>⏰ Hora (24h): <Text style={styles.bold}>{selectedTime}</Text></Text>
                             <Text style={styles.summaryRow}>👥 Asistentes: <Text style={styles.bold}>{numberOfPeople} personas</Text></Text>
-                            <Text style={styles.summaryRow}>📍 Tipo: <Text style={styles.bold}>{reservationType === 'mesa' ? 'Mesa' : 'Cancha'}</Text></Text>
+                            <Text style={styles.summaryRow}>📍 Tipo: <Text style={styles.bold}>Mesa</Text></Text>
                             <Text style={styles.summaryRow}>📌 Detalle: <Text style={styles.bold}>{resourceDetail}</Text></Text>
                             {reservationNote ? <Text style={styles.summaryRow}>📝 Notas: <Text style={styles.bold}>{reservationNote}</Text></Text> : null}
                         </View>
@@ -455,9 +508,15 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
             {/* BARRA INFERIOR */}
             <View style={styles.footer}>
                 {step < 4 ? (
-                    <TouchableOpacity style={styles.primaryBtn} onPress={() => setStep((step + 1) as any)}>
-                        <Text style={styles.primaryBtnText}>SIGUIENTE</Text>
-                        <Ionicons name="arrow-forward" size={18} color="#000" style={{ marginLeft: 6 }} />
+                    <TouchableOpacity style={styles.primaryBtn} onPress={handleNextStep} disabled={isValidating}>
+                        {isValidating ? (
+                            <ActivityIndicator size="small" color="#000" />
+                        ) : (
+                            <>
+                                <Text style={styles.primaryBtnText}>SIGUIENTE</Text>
+                                <Ionicons name="arrow-forward" size={18} color="#000" style={{ marginLeft: 6 }} />
+                            </>
+                        )}
                     </TouchableOpacity>
                 ) : (
                     <TouchableOpacity style={styles.whatsappBtn} onPress={sendReservationWhatsApp}>
@@ -486,13 +545,11 @@ const styles = StyleSheet.create({
     label: { color: '#01c38e', fontFamily: 'Poppins-Bold', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', marginTop: 10 },
     input: { backgroundColor: '#13151a', borderRadius: 12, borderWidth: 1, borderColor: '#1f2229', color: '#fff', padding: 14, marginBottom: 15 },
     
-    // Tarjetas de Mesas
     mesaCard: { width: 95, height: 85, backgroundColor: '#13151a', borderRadius: 12, borderWidth: 1, borderColor: '#1f2229', alignItems: 'center', justifyContent: 'center', marginRight: 10, padding: 8 },
     mesaCardActive: { borderColor: '#01c38e', backgroundColor: 'rgba(1, 195, 142, 0.1)' },
     mesaCardTitle: { color: '#fff', fontSize: 12, fontFamily: 'Poppins-Bold', marginTop: 4 },
     mesaCardCap: { color: '#9ca3af', fontSize: 10, fontFamily: 'Poppins-Regular', marginTop: 2 },
 
-    // Calendario en Cuadrícula Mensual
     calendarContainer: { backgroundColor: '#13151a', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#1f2229', marginBottom: 10 },
     calendarHeaderTitle: { color: '#fff', fontFamily: 'Poppins-Bold', fontSize: 15, marginBottom: 12, textAlign: 'left' },
     weekDaysRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
@@ -511,10 +568,13 @@ const styles = StyleSheet.create({
     timeDropdownSelector: { backgroundColor: '#13151a', borderRadius: 12, borderWidth: 1, borderColor: '#1f2229', padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
     timeDropdownText: { color: '#fff', fontFamily: 'Poppins-Bold', fontSize: 14 },
     timeDropdownGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#13151a', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#1f2229', marginBottom: 10 },
+    
     timeOptionItem: { width: '22%', paddingVertical: 10, backgroundColor: '#1a1d24', borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#23262f' },
     timeOptionItemActive: { backgroundColor: '#01c38e', borderColor: '#01c38e' },
+    timeOptionItemDisabled: { opacity: 0.4, backgroundColor: '#13151a', borderColor: '#1f2229' }, 
     timeOptionText: { color: '#fff', fontFamily: 'Poppins-Medium', fontSize: 12 },
     timeOptionTextActive: { color: '#000', fontFamily: 'Poppins-Bold' },
+    timeOptionTextDisabled: { color: '#4e5d78', textDecorationLine: 'line-through' }, 
 
     counterContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#13151a', borderRadius: 12, borderWidth: 1, borderColor: '#1f2229', padding: 10, marginBottom: 15 },
     counterBtn: { backgroundColor: '#1e222b', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#333' },

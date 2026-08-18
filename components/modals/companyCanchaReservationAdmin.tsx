@@ -31,8 +31,8 @@ const FONTS = {
     textBold: 'Poppins-Bold'
 };
 
-interface Mesa {
-    mesa_id: number;
+interface Cancha {
+    cancha_id: number;
     nombre: string;
     capacidad: number;
     activo: boolean;
@@ -40,16 +40,17 @@ interface Mesa {
 
 interface Reserva {
     reserva_id: number;
-    mesa_nombre?: string;
-    nombre_mesa?: string;
+    cancha_nombre?: string;
+    nombre_cancha?: string;
     cliente_nombre?: string;
     clienteNombre?: string;
     fecha: string;
-    hora: string;
+    hora_inicio: string;
+    hora_fin: string;
     personas: number;
 }
 
-interface CompanyReservationAdminProps {
+interface CompanyCanchaReservationAdminProps {
     visible: boolean;
     onClose: () => void;
     empresaId: string | null;
@@ -104,7 +105,7 @@ const getMonthCalendarGrid = () => {
     return { monthTitle, days };
 };
 
-// Nueva función para generar las horas disponibles según el horario de la empresa
+// Función para generar las horas disponibles según el horario de la empresa
 const generarHorasDisponibles = (apertura: string, cierre: string) => {
     if (!apertura || !cierre) return [];
     
@@ -120,33 +121,36 @@ const generarHorasDisponibles = (apertura: string, cierre: string) => {
     return horas;
 };
 
-export default function CompanyReservationAdmin({ visible, onClose, empresaId }: CompanyReservationAdminProps) {
+export default function CompanyCanchaReservationAdmin({ visible, onClose, empresaId }: CompanyCanchaReservationAdminProps) {
     const insets = useSafeAreaInsets();
-    const [activeTab, setActiveTab] = useState<'mesas' | 'bloquear' | 'reservas'>('mesas');
-    const [mesas, setMesas] = useState<Mesa[]>([]);
+    const [activeTab, setActiveTab] = useState<'canchas' | 'bloquear' | 'reservas'>('canchas');
+    const [canchas, setCanchas] = useState<Cancha[]>([]);
     const [reservas, setReservas] = useState<Reserva[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingReservas, setIsLoadingReservas] = useState(false);
 
-    const [mesaNombre, setMesaNombre] = useState('');
-    const [mesaCapacidad, setMesaCapacidad] = useState('4');
+    const [canchaNombre, setCanchaNombre] = useState('');
+    const [canchaCapacidad, setCanchaCapacidad] = useState('10');
     const [isCreating, setIsCreating] = useState(false);
 
-    const [selectedMesaId, setSelectedMesaId] = useState<number | null>(null);
+    const [selectedCanchaId, setSelectedCanchaId] = useState<number | null>(null);
     const [clienteNombre, setClienteNombre] = useState('Bloqueo Administrativo');
     
     const monthCalendar = getMonthCalendarGrid();
     const todayFormatted = new Date().toISOString().split('T')[0];
     const [fechaReserva, setFechaReserva] = useState(todayFormatted);
-    const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
-    const [personas, setPersonas] = useState<number>(4);
     
+    // Control de menús desplegables de hora ('start' | 'end' | null)
+    const [activeTimePicker, setActiveTimePicker] = useState<'start' | 'end' | null>(null);
+    
+    const [personas, setPersonas] = useState<number>(10);
     const [isBooking, setIsBooking] = useState(false);
 
-    // Nuevos estados para el horario
+    // Horarios de la empresa y horas seleccionadas de entrada/salida
     const [horarioApertura, setHorarioApertura] = useState<string>('08:00');
     const [horarioCierre, setHorarioCierre] = useState<string>('22:00');
-    const [horaReserva, setHoraReserva] = useState(''); // Dejamos vacío por defecto para que tome la hora de apertura
+    const [horaInicio, setHoraInicio] = useState<string>('08:00');
+    const [horaFin, setHoraFin] = useState<string>('09:00');
 
     // Generamos las horas disponibles en base a los estados
     const horasDisponibles = generarHorasDisponibles(horarioApertura, horarioCierre);
@@ -159,29 +163,38 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
             const res = await fetch(`${API_URL}/api/empresa/${empresaId}`);
             if (res.ok) {
                 const data = await res.json();
-                if (data.horarioApertura) setHorarioApertura(data.horarioApertura);
-                if (data.horarioCierre) setHorarioCierre(data.horarioCierre);
+                if (data.horarioApertura) {
+                    setHorarioApertura(data.horarioApertura);
+                    setHoraInicio(data.horarioApertura);
+                }
+                if (data.horarioCierre) {
+                    setHorarioCierre(data.horarioCierre);
+                    // Establecer una hora de fin por defecto (1 hora después o cierre)
+                    const [hApertura] = data.horarioApertura.split(':').map(Number);
+                    const defaultEnd = hApertura + 1 <= Number(data.horarioCierre.split(':')[0]) ? `${hApertura + 1 < 10 ? '0' : ''}${hApertura + 1}:00` : data.horarioCierre;
+                    setHoraFin(defaultEnd);
+                }
             }
         } catch (error) {
             console.error("Error loading empresa data:", error);
         }
     };
 
-    const loadMesas = async () => {
+    const loadCanchas = async () => {
         if (!empresaId) return;
         setIsLoading(true);
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
-            const res = await fetch(`${API_URL}/api/mesas/empresa/${empresaId}`);
+            const res = await fetch(`${API_URL}/api/canchas/empresa/${empresaId}`);
             if (res.ok) {
                 const data = await res.json();
-                setMesas(data.mesas || []);
-                if (data.mesas && data.mesas.length > 0 && !selectedMesaId) {
-                    setSelectedMesaId(data.mesas[0].mesa_id);
+                setCanchas(data.canchas || []);
+                if (data.canchas && data.canchas.length > 0 && !selectedCanchaId) {
+                    setSelectedCanchaId(data.canchas[0].cancha_id);
                 }
             }
         } catch (error) {
-            console.error("Error loading mesas:", error);
+            console.error("Error loading canchas:", error);
         } finally {
             setIsLoading(false);
         }
@@ -192,7 +205,7 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
         setIsLoadingReservas(true);
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
-            const res = await fetch(`${API_URL}/api/mesas/reservas/empresa/${empresaId}`);
+            const res = await fetch(`${API_URL}/api/canchas/reservas/empresa/${empresaId}`);
             if (res.ok) {
                 const data = await res.json();
                 setReservas(data.reservas || data || []);
@@ -206,48 +219,48 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
 
     useEffect(() => {
         if (visible && empresaId) {
-            loadEmpresaData(); // Cargamos los datos de la empresa para los horarios
-            loadMesas();
+            loadEmpresaData();
+            loadCanchas();
             loadReservas();
         }
     }, [visible, empresaId]);
 
-    const handleCreateMesa = async () => {
-        if (!mesaNombre.trim()) {
-            Alert.alert("Atención", "Ingresa un nombre para la mesa.");
+    const handleCreateCancha = async () => {
+        if (!canchaNombre.trim()) {
+            Alert.alert("Atención", "Ingresa un nombre para la cancha.");
             return;
         }
         setIsCreating(true);
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
-            const res = await fetch(`${API_URL}/api/mesas`, {
+            const res = await fetch(`${API_URL}/api/canchas`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    nombre: mesaNombre.trim(),
-                    capacidad: parseInt(mesaCapacidad) || 4,
+                    nombre: canchaNombre.trim(),
+                    capacidad: parseInt(canchaCapacidad) || 10,
                     empresa_id: Number(empresaId)
                 })
             });
             if (res.ok) {
-                setMesaNombre('');
-                setMesaCapacidad('4');
-                Alert.alert("Éxito", "Mesa creada correctamente.");
-                loadMesas();
+                setCanchaNombre('');
+                setCanchaCapacidad('10');
+                Alert.alert("Éxito", "Cancha creada correctamente.");
+                loadCanchas();
             } else {
-                Alert.alert("Error", "No se pudo crear la mesa.");
+                Alert.alert("Error", "No se pudo crear la cancha.");
             }
         } catch (error) {
-            console.error("Error creating mesa:", error);
+            console.error("Error creating cancha:", error);
         } finally {
             setIsCreating(false);
         }
     };
 
-    const handleDeleteMesa = async (mesa_id: number) => {
+    const handleDeleteCancha = async (cancha_id: number) => {
         Alert.alert(
-            "Eliminar Mesa",
-            "¿Estás seguro de eliminar esta mesa?",
+            "Eliminar Cancha",
+            "¿Estás seguro de eliminar esta cancha?",
             [
                 { text: "Cancelar", style: "cancel" },
                 {
@@ -256,10 +269,10 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                     onPress: async () => {
                         try {
                             const API_URL = process.env.EXPO_PUBLIC_API_URL;
-                            const res = await fetch(`${API_URL}/api/mesas/${mesa_id}`, { method: 'DELETE' });
-                            if (res.ok) loadMesas();
+                            const res = await fetch(`${API_URL}/api/canchas/${cancha_id}`, { method: 'DELETE' });
+                            if (res.ok) loadCanchas();
                         } catch (err) {
-                            console.error("Error deleting mesa:", err);
+                            console.error("Error deleting cancha:", err);
                         }
                     }
                 }
@@ -279,7 +292,7 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                     onPress: async () => {
                         try {
                             const API_URL = process.env.EXPO_PUBLIC_API_URL;
-                            const res = await fetch(`${API_URL}/api/mesas/reservas/${reserva_id}`, { method: 'DELETE' });
+                            const res = await fetch(`${API_URL}/api/canchas/reservas/${reserva_id}`, { method: 'DELETE' });
                             if (res.ok) loadReservas();
                         } catch (err) {
                             console.error("Error deleting reserva:", err);
@@ -290,35 +303,43 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
         );
     };
 
-    const handleBloquearMesa = async () => {
-        if (!selectedMesaId) {
-            Alert.alert("Atención", "Selecciona una mesa para bloquear.");
+    const handleBloquearCancha = async () => {
+        if (!selectedCanchaId) {
+            Alert.alert("Atención", "Selecciona una cancha para bloquear.");
             return;
         }
+
+        // Validación lógica de rangos horarios
+        if (horaInicio >= horaFin) {
+            Alert.alert("Error de Horario", "La hora de salida debe ser posterior a la hora de inicio.");
+            return;
+        }
+
         setIsBooking(true);
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
-            const res = await fetch(`${API_URL}/api/mesas/reservar`, {
+            const res = await fetch(`${API_URL}/api/canchas/reservar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    mesa_id: selectedMesaId,
+                    cancha_id: selectedCanchaId,
                     fecha: fechaReserva,
-                    hora: horaReserva || horarioApertura, // Usamos la hora seleccionada o la de apertura por defecto
+                    hora_inicio: horaInicio,
+                    hora_fin: horaFin,
                     personas: personas,
                     clienteNombre: clienteNombre.trim() || 'Bloqueo Administrativo'
                 })
             });
             const data = await res.json();
             if (res.ok) {
-                Alert.alert("Éxito", "Mesa bloqueada/reservada correctamente.");
+                Alert.alert("Éxito", "Cancha bloqueada/reservada correctamente.");
                 loadReservas();
                 setActiveTab('reservas');
             } else {
-                Alert.alert("Error", data.message || "No se pudo bloquear la mesa.");
+                Alert.alert("Error", data.message || "No se pudo bloquear la cancha.");
             }
         } catch (error) {
-            console.error("Error booking mesa:", error);
+            console.error("Error booking cancha:", error);
         } finally {
             setIsBooking(false);
         }
@@ -331,16 +352,16 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                     <TouchableOpacity onPress={onClose} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={22} color={COLORS.text} />
                     </TouchableOpacity>
-                    <Text style={styles.screenTitle}>GESTIÓN DE MESAS Y RESERVAS</Text>
+                    <Text style={styles.screenTitle}>GESTIÓN DE CANCHAS Y RESERVAS</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
                 <View style={styles.tabContainer}>
                     <TouchableOpacity
-                        style={[styles.tabButton, activeTab === 'mesas' && styles.tabActive]}
-                        onPress={() => setActiveTab('mesas')}
+                        style={[styles.tabButton, activeTab === 'canchas' && styles.tabActive]}
+                        onPress={() => setActiveTab('canchas')}
                     >
-                        <Text style={[styles.tabText, activeTab === 'mesas' && styles.tabTextActive]}>Mesas</Text>
+                        <Text style={[styles.tabText, activeTab === 'canchas' && styles.tabTextActive]}>Canchas</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.tabButton, activeTab === 'bloquear' && styles.tabActive]}
@@ -360,48 +381,48 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                 </View>
 
                 <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-                    {activeTab === 'mesas' ? (
+                    {activeTab === 'canchas' ? (
                         <View>
                             <View style={styles.cardForm}>
-                                <Text style={styles.label}>Nombre de la Mesa</Text>
+                                <Text style={styles.label}>Nombre de la Cancha</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Ej: Mesa 1, VIP 2"
+                                    placeholder="Ej: Cancha 1, Sintética Principal"
                                     placeholderTextColor={COLORS.textSec}
-                                    value={mesaNombre}
-                                    onChangeText={setMesaNombre}
+                                    value={canchaNombre}
+                                    onChangeText={setCanchaNombre}
                                 />
 
-                                <Text style={styles.label}>Capacidad</Text>
+                                <Text style={styles.label}>Capacidad (Jugadores)</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Ej: 4"
+                                    placeholder="Ej: 10"
                                     placeholderTextColor={COLORS.textSec}
                                     keyboardType="numeric"
-                                    value={mesaCapacidad}
-                                    onChangeText={setMesaCapacidad}
+                                    value={canchaCapacidad}
+                                    onChangeText={setCanchaCapacidad}
                                 />
 
                                 <TouchableOpacity
                                     style={styles.actionButton}
-                                    onPress={handleCreateMesa}
+                                    onPress={handleCreateCancha}
                                     disabled={isCreating}
                                 >
-                                    {isCreating ? <ActivityIndicator color="#000" /> : <Text style={styles.actionButtonText}>AGREGAR MESA</Text>}
+                                    {isCreating ? <ActivityIndicator color="#000" /> : <Text style={styles.actionButtonText}>AGREGAR CANCHA</Text>}
                                 </TouchableOpacity>
                             </View>
 
-                            <Text style={[styles.label, { marginTop: 15, marginBottom: 10 }]}>Mesas Registradas ({mesas.length})</Text>
+                            <Text style={[styles.label, { marginTop: 15, marginBottom: 10 }]}>Canchas Registradas ({canchas.length})</Text>
                             {isLoading ? (
                                 <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 20 }} />
                             ) : (
-                                mesas.map((mesa) => (
-                                    <View key={mesa.mesa_id} style={styles.mesaRow}>
+                                canchas.map((cancha) => (
+                                    <View key={cancha.cancha_id} style={styles.canchaRow}>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={styles.mesaName}>{mesa.nombre}</Text>
-                                            <Text style={styles.mesaCap}>Capacidad: {mesa.capacidad} personas</Text>
+                                            <Text style={styles.canchaName}>{cancha.nombre}</Text>
+                                            <Text style={styles.canchaCap}>Capacidad: {cancha.capacidad} jugadores</Text>
                                         </View>
-                                        <TouchableOpacity onPress={() => handleDeleteMesa(mesa.mesa_id)} style={styles.deleteBtn}>
+                                        <TouchableOpacity onPress={() => handleDeleteCancha(cancha.cancha_id)} style={styles.deleteBtn}>
                                             <Ionicons name="trash-outline" size={18} color="#ff5252" />
                                         </TouchableOpacity>
                                     </View>
@@ -410,21 +431,21 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                         </View>
                     ) : activeTab === 'bloquear' ? (
                         <View style={styles.cardForm}>
-                            <Text style={styles.label}>Seleccionar Mesa</Text>
+                            <Text style={styles.label}>Seleccionar Cancha</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
-                                {mesas.map((mesa) => (
+                                {canchas.map((cancha) => (
                                     <TouchableOpacity
-                                        key={mesa.mesa_id}
-                                        style={[styles.mesaChip, selectedMesaId === mesa.mesa_id && styles.mesaChipActive]}
-                                        onPress={() => setSelectedMesaId(mesa.mesa_id)}
+                                        key={cancha.cancha_id}
+                                        style={[styles.canchaChip, selectedCanchaId === cancha.cancha_id && styles.canchaChipActive]}
+                                        onPress={() => setSelectedCanchaId(cancha.cancha_id)}
                                     >
-                                        <Text style={[styles.mesaChipText, selectedMesaId === mesa.mesa_id && styles.mesaChipTextActive]}>
-                                            {mesa.nombre}
+                                        <Text style={[styles.canchaChipText, selectedCanchaId === cancha.cancha_id && styles.canchaChipTextActive]}>
+                                            {cancha.nombre}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
-                                {mesas.length === 0 && (
-                                    <Text style={{ color: COLORS.textSec, fontSize: 13 }}>No hay mesas creadas aún.</Text>
+                                {canchas.length === 0 && (
+                                    <Text style={{ color: COLORS.textSec, fontSize: 13 }}>No hay canchas creadas aún.</Text>
                                 )}
                             </ScrollView>
 
@@ -472,31 +493,60 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                             </View>
                             <Text style={styles.selectedDateInfo}>Fecha seleccionada: <Text style={styles.bold}>{fechaReserva}</Text></Text>
 
-                            {/* HORA DE RESERVA / BLOQUEO */}
-                            <Text style={styles.label}>Hora de Reserva / Bloqueo (Formato 24h)</Text>
+                            {/* HORA DE INICIO Y HORA DE SALIDA */}
+                            <Text style={styles.label}>Hora de Inicio / Llegada (Formato 24h)</Text>
                             <TouchableOpacity 
                                 style={styles.timeDropdownSelector}
-                                onPress={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                                onPress={() => setActiveTimePicker(activeTimePicker === 'start' ? null : 'start')}
                             >
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <Ionicons name="time-outline" size={18} color={COLORS.accent} style={{ marginRight: 8 }} />
-                                    <Text style={styles.timeDropdownText}>{horaReserva || horarioApertura} Hrs</Text>
+                                    <Text style={styles.timeDropdownText}>{horaInicio} Hrs</Text>
                                 </View>
-                                <Ionicons name={isTimeDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textSec} />
+                                <Ionicons name={activeTimePicker === 'start' ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textSec} />
                             </TouchableOpacity>
 
-                            {isTimeDropdownOpen && (
+                            {activeTimePicker === 'start' && (
                                 <View style={styles.timeDropdownGrid}>
                                     {horasDisponibles.map((time) => (
                                         <TouchableOpacity
-                                            key={time}
-                                            style={[styles.timeOptionItem, (horaReserva || horarioApertura) === time && styles.timeOptionItemActive]}
+                                            key={`start-${time}`}
+                                            style={[styles.timeOptionItem, horaInicio === time && styles.timeOptionItemActive]}
                                             onPress={() => {
-                                                setHoraReserva(time);
-                                                setIsTimeDropdownOpen(false);
+                                                setHoraInicio(time);
+                                                setActiveTimePicker(null);
                                             }}
                                         >
-                                            <Text style={[styles.timeOptionText, (horaReserva || horarioApertura) === time && styles.timeOptionTextActive]}>{time}</Text>
+                                            <Text style={[styles.timeOptionText, horaInicio === time && styles.timeOptionTextActive]}>{time}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            )}
+
+                            <Text style={styles.label}>Hora de Salida (Formato 24h)</Text>
+                            <TouchableOpacity 
+                                style={styles.timeDropdownSelector}
+                                onPress={() => setActiveTimePicker(activeTimePicker === 'end' ? null : 'end')}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="time-outline" size={18} color={COLORS.accent} style={{ marginRight: 8 }} />
+                                    <Text style={styles.timeDropdownText}>{horaFin} Hrs</Text>
+                                </View>
+                                <Ionicons name={activeTimePicker === 'end' ? "chevron-up" : "chevron-down"} size={18} color={COLORS.textSec} />
+                            </TouchableOpacity>
+
+                            {activeTimePicker === 'end' && (
+                                <View style={styles.timeDropdownGrid}>
+                                    {horasDisponibles.map((time) => (
+                                        <TouchableOpacity
+                                            key={`end-${time}`}
+                                            style={[styles.timeOptionItem, horaFin === time && styles.timeOptionItemActive]}
+                                            onPress={() => {
+                                                setHoraFin(time);
+                                                setActiveTimePicker(null);
+                                            }}
+                                        >
+                                            <Text style={[styles.timeOptionText, horaFin === time && styles.timeOptionTextActive]}>{time}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
@@ -511,7 +561,7 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                                 onChangeText={setClienteNombre}
                             />
 
-                            <Text style={styles.label}>Número de Personas</Text>
+                            <Text style={styles.label}>Número de Jugadores / Personas</Text>
                             <View style={styles.counterContainer}>
                                 <TouchableOpacity 
                                     style={styles.counterBtn}
@@ -530,15 +580,15 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
 
                             <TouchableOpacity
                                 style={[styles.actionButton, { backgroundColor: '#ff5252', marginTop: 10 }]}
-                                onPress={handleBloquearMesa}
+                                onPress={handleBloquearCancha}
                                 disabled={isBooking}
                             >
-                                {isBooking ? <ActivityIndicator color="#FFF" /> : <Text style={[styles.actionButtonText, { color: '#FFF' }]}>BLOQUEAR / RESERVAR MESA</Text>}
+                                {isBooking ? <ActivityIndicator color="#FFF" /> : <Text style={[styles.actionButtonText, { color: '#FFF' }]}>BLOQUEAR / RESERVAR CANCHA</Text>}
                             </TouchableOpacity>
                         </View>
                     ) : (
                         <View>
-                            <Text style={[styles.label, { marginBottom: 10 }]}>Mesas Reservadas / Bloqueadas ({reservas.length})</Text>
+                            <Text style={[styles.label, { marginBottom: 10 }]}>Canchas Reservadas / Bloqueadas ({reservas.length})</Text>
                             {isLoadingReservas ? (
                                 <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 20 }} />
                             ) : reservas.length === 0 ? (
@@ -550,15 +600,15 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
                                 </View>
                             ) : (
                                 reservas.map((res, index) => {
-                                    const mesaName = res.mesa_nombre || res.nombre_mesa || 'Mesa';
+                                    const canchaName = res.cancha_nombre || res.nombre_cancha || 'Cancha';
                                     const cliente = res.cliente_nombre || res.clienteNombre || 'Sin nombre';
                                     return (
                                         <View key={res.reserva_id || index} style={styles.reservaCard}>
                                             <View style={styles.reservaHeader}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                    <View style={styles.mesaBadge}>
-                                                        <Ionicons name="restaurant-outline" size={14} color={COLORS.accent} />
-                                                        <Text style={styles.mesaBadgeText}>{mesaName}</Text>
+                                                    <View style={styles.canchaBadge}>
+                                                        <Ionicons name="football-outline" size={14} color={COLORS.accent} />
+                                                        <Text style={styles.canchaBadgeText}>{canchaName}</Text>
                                                     </View>
                                                     <Text style={[styles.reservaPersonas, { marginLeft: 10 }]}>{res.personas} pers.</Text>
                                                 </View>
@@ -582,8 +632,8 @@ export default function CompanyReservationAdmin({ visible, onClose, empresaId }:
 
                                             <View style={styles.reservaDetailRow}>
                                                 <Ionicons name="time-outline" size={15} color={COLORS.textSec} />
-                                                <Text style={styles.reservaTextLabel}>A qué hora:</Text>
-                                                <Text style={styles.reservaTextValue}>{res.hora}</Text>
+                                                <Text style={styles.reservaTextLabel}>Horario:</Text>
+                                                <Text style={styles.reservaTextValue}>{res.hora_inicio} - {res.hora_fin} Hrs</Text>
                                             </View>
                                         </View>
                                     );
@@ -694,7 +744,7 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.title,
         fontSize: 13
     },
-    mesaRow: {
+    canchaRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -705,12 +755,12 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.border
     },
-    mesaName: {
+    canchaName: {
         color: COLORS.text,
         fontFamily: FONTS.textBold,
         fontSize: 14
     },
-    mesaCap: {
+    canchaCap: {
         color: COLORS.textSec,
         fontFamily: FONTS.textRegular,
         fontSize: 12,
@@ -723,7 +773,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#ff5252'
     },
-    mesaChip: {
+    canchaChip: {
         paddingVertical: 8,
         paddingHorizontal: 16,
         backgroundColor: COLORS.background,
@@ -732,16 +782,16 @@ const styles = StyleSheet.create({
         borderColor: COLORS.border,
         marginRight: 8
     },
-    mesaChipActive: {
+    canchaChipActive: {
         backgroundColor: COLORS.accent,
         borderColor: COLORS.accent
     },
-    mesaChipText: {
+    canchaChipText: {
         color: COLORS.textSec,
         fontFamily: FONTS.textMedium,
         fontSize: 12
     },
-    mesaChipTextActive: {
+    canchaChipTextActive: {
         color: '#000',
         fontFamily: FONTS.textBold
     },
@@ -846,7 +896,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border
     },
-    mesaBadge: {
+    canchaBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(1, 195, 142, 0.1)',
@@ -856,7 +906,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.accent
     },
-    mesaBadgeText: {
+    canchaBadgeText: {
         color: COLORS.accent,
         fontFamily: FONTS.textBold,
         fontSize: 12,

@@ -8,6 +8,7 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform,
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // --- IMPORTACIÓN DEL COMPONENTE EXTERNO DE MESAS Y RESERVAS ---
+import CompanyCanchaReservationAdmin from '../../../components/modals/companyCanchaReservationAdmin';
 import CompanyReservationAdmin from '../../../components/modals/companyReservationAdmin';
 
 // --- PALETA QRONNOS ---
@@ -101,6 +102,9 @@ export default function CompanyScreen() {
     
     // --- ESTADO PARA EL MODAL DE GESTIÓN DE MESAS Y RESERVAS ---
     const [gestionModalVisible, setGestionModalVisible] = useState(false);
+    
+    // --- ESTADO PARA EL MODAL DE GESTIÓN DE CANCHAS Y RESERVAS ---
+    const [gestionCanchaModalVisible, setGestionCanchaModalVisible] = useState(false);
 
     // --- CATÁLOGO DINÁMICO (API) ---
     const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -435,6 +439,18 @@ export default function CompanyScreen() {
                             </View>
                             <Ionicons name="chevron-forward" size={20} color="#000" />
                         </TouchableOpacity>
+
+                        {/* --- BOTÓN DE GESTIÓN DE CANCHAS Y RESERVAS --- */}
+                        <TouchableOpacity
+                            style={[styles.productsLinkBtn, { backgroundColor: '#ffa726', marginTop: 12 }]}
+                            onPress={() => setGestionCanchaModalVisible(true)}
+                        >
+                            <View style={styles.productsLinkContent}>
+                                <Ionicons name="football-outline" size={20} color="#000" />
+                                <Text style={[styles.productsLinkText, { color: '#000' }]}>GESTIONAR CANCHAS Y RESERVAS</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color="#000" />
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.divider} />
@@ -616,6 +632,13 @@ export default function CompanyScreen() {
             <CompanyReservationAdmin 
                 visible={gestionModalVisible} 
                 onClose={() => setGestionModalVisible(false)} 
+                empresaId={empresaId} 
+            />
+
+            {/* --- COMPONENTE EXTERNO DE GESTIÓN DE CANCHAS Y RESERVAS --- */}
+            <CompanyCanchaReservationAdmin 
+                visible={gestionCanchaModalVisible} 
+                onClose={() => setGestionCanchaModalVisible(false)} 
                 empresaId={empresaId} 
             />
 
