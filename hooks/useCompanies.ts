@@ -18,6 +18,8 @@ export interface Lugar {
     img3?: string | null;
     lat?: number | null;
     lng?: number | null;
+    horarioApertura?: string;
+    horarioCierre?: string;
 }
 
 const parseCoord = (value: any): number | null => {
@@ -62,6 +64,8 @@ const fetchCompanies = async (): Promise<Lugar[]> => {
         img3: item.fotoDescripcion3,
         lat: parseCoord(item.lat ?? item.latitud ?? item.latitude),
         lng: parseCoord(item.lng ?? item.longitud ?? item.lon ?? item.longitude),
+        horarioApertura: item.horarioApertura,
+        horarioCierre: item.horarioCierre,
     }));
 };
 

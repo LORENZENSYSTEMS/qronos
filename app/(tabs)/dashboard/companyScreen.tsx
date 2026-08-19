@@ -5,24 +5,12 @@ import * as Location from 'expo-location';
 import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    RefreshControl,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions
-} from "react-native";
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+// --- IMPORTACIÓN DEL COMPONENTE EXTERNO DE MESAS Y RESERVAS ---
+import CompanyCanchaReservationAdmin from '../../../components/modals/companyCanchaReservationAdmin';
+import CompanyReservationAdmin from '../../../components/modals/companyReservationAdmin';
 
 // --- PALETA QRONNOS ---
 const COLORS = {
@@ -44,16 +32,21 @@ const FONTS = {
     textBold: 'Poppins-Bold'
 };
 
-// --- CATEGORÍAS PERMITIDAS ---
-const VALID_CATEGORIES = ["Restaurantes", "Bar", "Tiendas"];
-
-// --- UBICACIONES DISPONIBLES ---
-const LOCATIONS = {
-    "Colombia": ["Cartagena de Indias", "Turbaco", "Puerto Colombia"],
-    "Venezuela": ["Ciudad Ojeda"],
-    "Emiratos Árabes Unidos": ["Dubái"]
-};
-const COUNTRIES = Object.keys(LOCATIONS);
+// --- TIPOS DE CATÁLOGO DINÁMICO ---
+interface PaisUbicacion {
+    id: number;
+    nombre: string;
+    codigo: string;
+}
+interface CiudadUbicacion {
+    id: number;
+    nombre: string;
+    paisId: number;
+}
+interface Categoria {
+    id: number;
+    nombre: string;
+}
 
 // --- HOOK DE AUTORIZACIÓN ---
 const useEmpresaCheck = () => {
@@ -101,24 +94,39 @@ export default function CompanyScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { isAuthorized, isLoadingAuth, errorMessage, empresaId } = useEmpresaCheck();
-
     const { width } = useWindowDimensions();
     const isTablet = width >= 768;
     const isSmallScreen = width < 380;
-
     const [totalScans, setTotalScans] = useState<number | null>(null);
     const [totalPoints, setTotalPoints] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isLocating, setIsLocating] = useState(false);
     
+    // --- ESTADO PARA EL MODAL DE GESTIÓN DE MESAS Y RESERVAS ---
+    const [gestionModalVisible, setGestionModalVisible] = useState(false);
+    
+    // --- ESTADO PARA EL MODAL DE GESTIÓN DE CANCHAS Y RESERVAS ---
+    const [gestionCanchaModalVisible, setGestionCanchaModalVisible] = useState(false);
+
+    // --- CATÁLOGO DINÁMICO (API) ---
+    const [categorias, setCategorias] = useState<Categoria[]>([]);
+    const [paises, setPaises] = useState<PaisUbicacion[]>([]);
+    const [ciudades, setCiudades] = useState<CiudadUbicacion[]>([]);
+    
     // --- ESTADO PARA RECARGA ---
     const [refreshing, setRefreshing] = useState(false);
-
+    
     // --- ESTADOS PARA LOS MENÚS DESPLEGABLES ---
     const [countryModalVisible, setCountryModalVisible] = useState(false);
     const [cityModalVisible, setCityModalVisible] = useState(false);
+    
+    // --- ESTADOS PARA EL SELECTOR DE HORA MODERNO ---
+    const [timeModalVisible, setTimeModalVisible] = useState(false);
+    const [timeType, setTimeType] = useState<'apertura' | 'cierre'>('apertura');
+    const [tempHour, setTempHour] = useState('08');
+    const [tempMinute, setTempMinute] = useState('00');
 
-    // --- ESTADO DEL FORMULARIO ---
+    // --- ESTADO DEL FORMULARIO DE EMPRESA ---
     const [formData, setFormData] = useState({
         descripcion: '',
         ubicacionMaps: '',
@@ -132,7 +140,9 @@ export default function CompanyScreen() {
         fotoPerfil: null as string | null,
         fotoDescripcion1: null as string | null,
         fotoDescripcion2: null as string | null,
-        fotoDescripcion3: null as string | null
+        fotoDescripcion3: null as string | null,
+        horarioApertura: '',
+        horarioCierre: '',
     });
 
     const [fontsLoaded] = useFonts({
@@ -142,18 +152,64 @@ export default function CompanyScreen() {
         'Poppins-Bold': require('../../../assets/fonts/Poppins-Bold.ttf'),
     });
 
-    // --- LÓGICA REUTILIZABLE DE CARGA DE DATOS ---
+    const openTimeSelector = (type: 'apertura' | 'cierre') => {
+        setTimeType(type);
+        const currentTime = type === 'apertura' ? formData.horarioApertura : formData.horarioCierre;
+        if (currentTime && currentTime.includes(':')) {
+            const [h, m] = currentTime.split(':');
+            setTempHour(h || '08');
+            setTempMinute(m || '00');
+        } else {
+            setTempHour(type === 'apertura' ? '08' : '18');
+            setTempMinute('00');
+        }
+        setTimeModalVisible(true);
+    };
+
+    const confirmTimeSelection = () => {
+        const formatted = `${tempHour}:${tempMinute}`;
+        if (timeType === 'apertura') {
+            setFormData(prev => ({ ...prev, horarioApertura: formatted }));
+        } else {
+            setFormData(prev => ({ ...prev, horarioCierre: formatted }));
+        }
+        setTimeModalVisible(false);
+    };
+
+    // --- CARGA DE DATOS ---
     const loadData = useCallback(async (isRefresh = false) => {
         if (!empresaId) return;
-        
-        if (isRefresh) {
-            setRefreshing(true);
-        }
+        if (isRefresh) setRefreshing(true);
 
         try {
             const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-            // 1. Cargar Métricas
+            const [categoriasRes, paisesRes, ciudadesRes] = await Promise.all([
+                fetch(`${API_URL}/api/categorias`),
+                fetch(`${API_URL}/api/paises`),
+                fetch(`${API_URL}/api/ciudades`),
+            ]);
+
+            let categoriasLista: Categoria[] = [];
+            if (categoriasRes.ok) {
+                const data = await categoriasRes.json();
+                const lista = Array.isArray(data) ? data : (data.categorias || []);
+                categoriasLista = lista.map((c: any) => ({ id: c.categoria_id, nombre: c.nombre }));
+                setCategorias(categoriasLista);
+            }
+
+            if (paisesRes.ok) {
+                const data = await paisesRes.json();
+                const lista = Array.isArray(data) ? data : (data.paises || []);
+                setPaises(lista.map((p: any) => ({ id: p.pais_id, nombre: p.nombre, codigo: p.codigo || '' })));
+            }
+
+            if (ciudadesRes.ok) {
+                const data = await ciudadesRes.json();
+                const lista = Array.isArray(data) ? data : (data.ciudades || []);
+                setCiudades(lista.map((c: any) => ({ id: c.ciudad_id, nombre: c.nombre, paisId: c.pais_id })));
+            }
+
             const responseMetricas = await fetch(`${API_URL}/api/metricas/empresa/${empresaId}`);
             const metricas = await responseMetricas.json();
 
@@ -167,12 +223,14 @@ export default function CompanyScreen() {
                 setTotalPoints(0);
             }
 
-            // 2. Cargar Información de la Empresa
             const responseEmpresa = await fetch(`${API_URL}/api/empresa/${empresaId}`);
             if (responseEmpresa.ok) {
                 const data = await responseEmpresa.json();
                 const catFromBd = data.categoria;
-                const finalCat = VALID_CATEGORIES.includes(catFromBd) ? catFromBd : VALID_CATEGORIES[0];
+                const nombresCategorias = categoriasLista.map(c => c.nombre);
+                const finalCat = nombresCategorias.includes(catFromBd) ? catFromBd : (nombresCategorias[0] || 'Restaurantes');
+                const horaAp = data.horarioApertura || '';
+                const horaCi = data.horarioCierre || '';
 
                 setFormData({
                     descripcion: data.descripcion || '',
@@ -188,29 +246,25 @@ export default function CompanyScreen() {
                     fotoDescripcion1: data.fotoDescripcion1 || null,
                     fotoDescripcion2: data.fotoDescripcion2 || null,
                     fotoDescripcion3: data.fotoDescripcion3 || null,
+                    horarioApertura: horaAp,
+                    horarioCierre: horaCi,
                 });
             }
         } catch (error) {
             console.error("Error fetching data:", error);
             Alert.alert("Error", "No se pudieron cargar los datos. Verifica tu conexión.");
         } finally {
-            if (isRefresh) {
-                setRefreshing(false);
-            }
+            if (isRefresh) setRefreshing(false);
         }
     }, [empresaId]);
 
-    // Efecto Inicial
     useEffect(() => {
         if (isAuthorized && empresaId) {
             loadData(false);
         }
     }, [isAuthorized, empresaId, loadData]);
 
-    // Función del botón y del Pull-to-Refresh
-    const onRefresh = () => {
-        loadData(true);
-    };
+    const onRefresh = () => loadData(true);
 
     const updateEmpresaData = async () => {
         if (!empresaId) return;
@@ -227,6 +281,8 @@ export default function CompanyScreen() {
             data.append('pais', formData.pais);
             data.append('ciudad', formData.ciudad);
             data.append('categoria', formData.categoria);
+            data.append('horarioApertura', formData.horarioApertura);
+            data.append('horarioCierre', formData.horarioCierre);
 
             const appendImage = (key: string, uri: string | null) => {
                 if (!uri) return;
@@ -252,10 +308,8 @@ export default function CompanyScreen() {
             });
 
             if (response.ok) {
-                Alert.alert("Éxito", "Tu perfil se ha actualizado y la información se mostrará en el Index.");
+                Alert.alert("Éxito", "Tu perfil se ha actualizado correctamente.");
             } else {
-                const errText = await response.text();
-                console.error("Server Error:", errText);
                 Alert.alert("Error", "No se pudo actualizar el perfil.");
             }
         } catch (error) {
@@ -347,15 +401,14 @@ export default function CompanyScreen() {
         );
     }
 
-    // @ts-ignore
-    const availableCities = formData.pais && LOCATIONS[formData.pais] ? LOCATIONS[formData.pais] : [];
+    const selectedPais = paises.find(p => p.nombre === formData.pais);
+    const availableCities = selectedPais
+        ? ciudades.filter(c => c.paisId === selectedPais.id).map(c => c.nombre)
+        : [];
 
     return (
         <View style={{ flex: 1, backgroundColor: COLORS.background, paddingTop: insets.top }}>
-            <KeyboardAvoidingView
-                style={{ flex: 1 }}
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
-            >
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
                 <ScrollView
                     style={styles.scrollViewStyle}
                     contentContainerStyle={[
@@ -375,7 +428,6 @@ export default function CompanyScreen() {
                                 PANEL DE <Text style={{ color: COLORS.accent }}>EMPRESA</Text>
                             </Text>
                         </View>
-                        {/* --- BOTÓN DE RECARGA EN EL HEADER --- */}
                         <TouchableOpacity 
                             onPress={onRefresh} 
                             style={styles.headerBtn} 
@@ -425,6 +477,30 @@ export default function CompanyScreen() {
                             </View>
                             <Ionicons name="chevron-forward" size={20} color="#000" />
                         </TouchableOpacity>
+
+                        {/* --- BOTÓN DE GESTIÓN DE MESAS Y RESERVAS --- */}
+                        <TouchableOpacity
+                            style={[styles.productsLinkBtn, { backgroundColor: '#4F9CF9', marginTop: 12 }]}
+                            onPress={() => setGestionModalVisible(true)}
+                        >
+                            <View style={styles.productsLinkContent}>
+                                <Ionicons name="restaurant-outline" size={20} color="#000" />
+                                <Text style={[styles.productsLinkText, { color: '#000' }]}>GESTIONAR MESAS Y RESERVAS</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color="#000" />
+                        </TouchableOpacity>
+
+                        {/* --- BOTÓN DE GESTIÓN DE CANCHAS Y RESERVAS --- */}
+                        <TouchableOpacity
+                            style={[styles.productsLinkBtn, { backgroundColor: '#ffa726', marginTop: 12 }]}
+                            onPress={() => setGestionCanchaModalVisible(true)}
+                        >
+                            <View style={styles.productsLinkContent}>
+                                <Ionicons name="football-outline" size={20} color="#000" />
+                                <Text style={[styles.productsLinkText, { color: '#000' }]}>GESTIONAR CANCHAS Y RESERVAS</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color="#000" />
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.divider} />
@@ -439,7 +515,6 @@ export default function CompanyScreen() {
                     </View>
 
                     <View style={styles.formContainer}>
-
                         <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 10 }}>
                             <Text style={[styles.label, { alignSelf: 'center', marginBottom: 10 }]}>Logo de la Empresa</Text>
                             <TouchableOpacity onPress={() => pickImage('fotoPerfil')} style={styles.profileImageContainer}>
@@ -458,22 +533,22 @@ export default function CompanyScreen() {
 
                         <Text style={styles.label}>Categoría (Selecciona una)</Text>
                         <View style={[styles.categoryContainer, isSmallScreen && { flexWrap: 'wrap' }]}>
-                            {VALID_CATEGORIES.map((cat) => (
+                            {categorias.map((cat) => (
                                 <TouchableOpacity
-                                    key={cat}
+                                    key={cat.id}
                                     style={[
                                         styles.categoryChip,
-                                        formData.categoria === cat && styles.categoryChipActive,
+                                        formData.categoria === cat.nombre && styles.categoryChipActive,
                                         isSmallScreen && { minWidth: '45%' }
                                     ]}
-                                    onPress={() => setFormData({ ...formData, categoria: cat })}
+                                    onPress={() => setFormData({ ...formData, categoria: cat.nombre })}
                                 >
                                     <Text style={[
                                         styles.categoryChipText,
-                                        formData.categoria === cat && styles.categoryChipTextActive,
+                                        formData.categoria === cat.nombre && styles.categoryChipTextActive,
                                         isSmallScreen && { fontSize: 11 }
                                     ]}>
-                                        {cat}
+                                        {cat.nombre}
                                     </Text>
                                 </TouchableOpacity>
                             ))}
@@ -496,7 +571,7 @@ export default function CompanyScreen() {
                                     style={[styles.input, { justifyContent: 'center' }]}
                                     onPress={() => setCountryModalVisible(true)}
                                 >
-                                    <Text style={{ color: formData.pais ? COLORS.text : COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 14 }}>
+                                    <Text style={{ color: formData.pais ? COLORS.text : COLORS.textSec, fontSize: 14 }}>
                                         {formData.pais || "Seleccionar..."}
                                     </Text>
                                 </TouchableOpacity>
@@ -506,14 +581,11 @@ export default function CompanyScreen() {
                                 <TouchableOpacity
                                     style={[styles.input, { justifyContent: 'center' }]}
                                     onPress={() => {
-                                        if (!formData.pais) {
-                                            Alert.alert("Atención", "Primero debes seleccionar un país.");
-                                        } else {
-                                            setCityModalVisible(true);
-                                        }
+                                        if (!formData.pais) Alert.alert("Atención", "Primero debes seleccionar un país.");
+                                        else setCityModalVisible(true);
                                     }}
                                 >
-                                    <Text style={{ color: formData.ciudad ? COLORS.text : COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 14 }}>
+                                    <Text style={{ color: formData.ciudad ? COLORS.text : COLORS.textSec, fontSize: 14 }}>
                                         {formData.ciudad || "Seleccionar..."}
                                     </Text>
                                 </TouchableOpacity>
@@ -573,6 +645,35 @@ export default function CompanyScreen() {
                             value={formData.whatsapp}
                             onChangeText={(t) => setFormData({ ...formData, whatsapp: t })}
                         />
+                        
+                        <Text style={styles.label}>Horario de Atención</Text>
+                        <View style={[styles.rowInputs, isSmallScreen && { flexDirection: 'column' }]}>
+                            <View style={{ flex: 1, marginRight: isSmallScreen ? 0 : 10 }}>
+                                <Text style={[styles.label, { fontSize: 12, color: COLORS.textSec, marginBottom: 5 }]}>Apertura</Text>
+                                <TouchableOpacity 
+                                    style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]} 
+                                    onPress={() => openTimeSelector('apertura')}
+                                >
+                                    <Text style={{ color: formData.horarioApertura ? COLORS.text : COLORS.textSec, fontSize: 14, fontFamily: FONTS.textMedium }}>
+                                        {formData.horarioApertura || "08:00"}
+                                    </Text>
+                                    <Ionicons name="time-outline" size={18} color={COLORS.accent} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.label, { fontSize: 12, color: COLORS.textSec, marginBottom: 5 }]}>Cierre</Text>
+                                <TouchableOpacity 
+                                    style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]} 
+                                    onPress={() => openTimeSelector('cierre')}
+                                >
+                                    <Text style={{ color: formData.horarioCierre ? COLORS.text : COLORS.textSec, fontSize: 14, fontFamily: FONTS.textMedium }}>
+                                        {formData.horarioCierre || "18:00"}
+                                    </Text>
+                                    <Ionicons name="time-outline" size={18} color={COLORS.accent} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
 
                         <Text style={styles.label}>Fotos para el Index (Opcional)</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
@@ -596,47 +697,124 @@ export default function CompanyScreen() {
                             ))}
                         </ScrollView>
 
-                        <TouchableOpacity
-                            style={styles.saveButton}
-                            onPress={updateEmpresaData}
-                            disabled={isSaving}
-                        >
-                            {isSaving ? (
-                                <ActivityIndicator color="#000" />
-                            ) : (
-                                <Text style={styles.saveButtonText}>GUARDAR Y PUBLICAR</Text>
-                            )}
+                        <TouchableOpacity style={styles.saveButton} onPress={updateEmpresaData} disabled={isSaving}>
+                            {isSaving ? <ActivityIndicator color="#000" /> : <Text style={styles.saveButtonText}>GUARDAR Y PUBLICAR</Text>}
                         </TouchableOpacity>
-
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {/* --- MODAL DE PAÍSES --- */}
+            {/* --- COMPONENTE EXTERNO DE GESTIÓN DE MESAS Y RESERVAS --- */}
+            <CompanyReservationAdmin 
+                visible={gestionModalVisible} 
+                onClose={() => setGestionModalVisible(false)} 
+                empresaId={empresaId} 
+            />
+
+            {/* --- COMPONENTE EXTERNO DE GESTIÓN DE CANCHAS Y RESERVAS --- */}
+            <CompanyCanchaReservationAdmin 
+                visible={gestionCanchaModalVisible} 
+                onClose={() => setGestionCanchaModalVisible(false)} 
+                empresaId={empresaId} 
+            />
+
+            {/* --- MODAL MODERNO PARA SELECCIONAR HORA --- */}
+            <Modal visible={timeModalVisible} transparent animationType="fade">
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setTimeModalVisible(false)}>
+                    <View style={[styles.modalContent, { maxWidth: 360 }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={styles.modalTitle}>
+                                {timeType === 'apertura' ? 'Hora de Apertura' : 'Hora de Cierre'}
+                            </Text>
+                            <TouchableOpacity onPress={() => setTimeModalVisible(false)}>
+                                <Ionicons name="close" size={22} color={COLORS.textSec} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 25, gap: 15 }}>
+                            {/* Columna Horas */}
+                            <View style={{ flex: 1, alignItems: 'center' }}>
+                                <Text style={[styles.label, { marginBottom: 8 }]}>Hora</Text>
+                                <View style={{ height: 160, width: '100%', backgroundColor: COLORS.background, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' }}>
+                                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 10 }}>
+                                        {Array.from({ length: 24 }, (_, i) => {
+                                            const h = i.toString().padStart(2, '0');
+                                            const isSelected = tempHour === h;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={h}
+                                                    style={{ paddingVertical: 10, alignItems: 'center', backgroundColor: isSelected ? 'rgba(1, 195, 142, 0.15)' : 'transparent' }}
+                                                    onPress={() => setTempHour(h)}
+                                                >
+                                                    <Text style={{ color: isSelected ? COLORS.accent : COLORS.text, fontFamily: isSelected ? FONTS.textBold : FONTS.textRegular, fontSize: 16 }}>
+                                                        {h}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                </View>
+                            </View>
+
+                            <Text style={{ color: COLORS.accent, fontSize: 24, fontFamily: FONTS.title, marginTop: 20 }}>:</Text>
+
+                            {/* Columna Minutos */}
+                            <View style={{ flex: 1, alignItems: 'center' }}>
+                                <Text style={[styles.label, { marginBottom: 8 }]}>Minutos</Text>
+                                <View style={{ height: 160, width: '100%', backgroundColor: COLORS.background, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' }}>
+                                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 10 }}>
+                                        {['00', '10', '15', '20', '30', '40', '45', '50'].map((m) => {
+                                            const isSelected = tempMinute === m;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={m}
+                                                    style={{ paddingVertical: 10, alignItems: 'center', backgroundColor: isSelected ? 'rgba(1, 195, 142, 0.15)' : 'transparent' }}
+                                                    onPress={() => setTempMinute(m)}
+                                                >
+                                                    <Text style={{ color: isSelected ? COLORS.accent : COLORS.text, fontFamily: isSelected ? FONTS.textBold : FONTS.textRegular, fontSize: 16 }}>
+                                                        {m}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                </View>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity 
+                            style={{ backgroundColor: COLORS.accent, padding: 14, borderRadius: 12, alignItems: 'center' }}
+                            onPress={confirmTimeSelection}
+                        >
+                            <Text style={{ color: '#000', fontFamily: FONTS.textBold, fontSize: 14 }}>CONFIRMAR HORA</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* --- MODALES DE PAÍSES Y CIUDADES --- */}
             <Modal visible={countryModalVisible} transparent animationType="fade">
                 <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCountryModalVisible(false)}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Selecciona el País</Text>
-                        {COUNTRIES.map(c => (
+                        {paises.map(p => (
                             <TouchableOpacity
-                                key={c}
+                                key={p.id}
                                 style={styles.modalOption}
                                 onPress={() => {
-                                    setFormData({ ...formData, pais: c, ciudad: '' });
+                                    setFormData({ ...formData, pais: p.nombre, ciudad: '' });
                                     setCountryModalVisible(false);
                                 }}
                             >
-                                <Text style={[
-                                    styles.modalOptionText,
-                                    formData.pais === c && { color: COLORS.accent, fontFamily: FONTS.textBold }
-                                ]}>{c}</Text>
+                                <Text style={[styles.modalOptionText, formData.pais === p.nombre && { color: COLORS.accent, fontFamily: FONTS.textBold }]}>
+                                    {p.nombre}{p.codigo ? ` (${p.codigo})` : ''}
+                                </Text>
                             </TouchableOpacity>
                         ))}
                     </View>
                 </TouchableOpacity>
             </Modal>
-
-            {/* --- MODAL DE CIUDADES --- */}
+            
             <Modal visible={cityModalVisible} transparent animationType="fade">
                 <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCityModalVisible(false)}>
                     <View style={styles.modalContent}>
@@ -650,16 +828,14 @@ export default function CompanyScreen() {
                                     setCityModalVisible(false);
                                 }}
                             >
-                                <Text style={[
-                                    styles.modalOptionText,
-                                    formData.ciudad === city && { color: COLORS.accent, fontFamily: FONTS.textBold }
-                                ]}>{city}</Text>
+                                <Text style={[styles.modalOptionText, formData.ciudad === city && { color: COLORS.accent, fontFamily: FONTS.textBold }]}>
+                                    {city}
+                                </Text>
                             </TouchableOpacity>
                         ))}
                     </View>
                 </TouchableOpacity>
             </Modal>
-
         </View>
     );
 }
@@ -714,7 +890,6 @@ const styles = StyleSheet.create({
         textAlign: "left",
         flexWrap: 'wrap'
     },
-    // --- ESTILO DEL BOTÓN HEADER ---
     headerBtn: {
         width: 44,
         height: 44,
@@ -946,16 +1121,17 @@ const styles = StyleSheet.create({
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20
+        padding: 16
     },
     modalContent: {
         backgroundColor: COLORS.cardBg,
         width: '100%',
-        maxWidth: 400,
-        borderRadius: 16,
+        maxWidth: 450,
+        maxHeight: '85%',
+        borderRadius: 20,
         padding: 20,
         borderWidth: 1,
         borderColor: COLORS.border
@@ -963,9 +1139,7 @@ const styles = StyleSheet.create({
     modalTitle: {
         color: COLORS.text,
         fontFamily: FONTS.title,
-        fontSize: 16,
-        marginBottom: 15,
-        textAlign: 'center'
+        fontSize: 15
     },
     modalOption: {
         paddingVertical: 15,
