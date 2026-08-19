@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // --- IMPORTANTE: Asegúrate de que la ruta a ProductCard sea correcta ---
 import ProductCard from '../../../components/products/ProductCard';
+import CompanyMap from '../../../components/maps/CompanyMap';
 import { useCompanies } from '../../../hooks/useCompanies';
 import { useFavorites } from '../../../hooks/useFavorites';
 
@@ -140,7 +141,7 @@ export default function HomeScreen() {
   const navigator: any = useNavigation();
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isTablet = width >= 768;
 
   const { data: stores, isLoading: loadingStores, refetch: refetchStores, isFetching } = useCompanies();
@@ -158,6 +159,7 @@ export default function HomeScreen() {
   const [selectedLugar, setSelectedLugar] = useState<Lugar | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category>('Todos');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [selectedCountry, setSelectedCountry] = useState<string>('Colombia');
   const [selectedCity, setSelectedCity] = useState<string>('Todas');
   const [paisesUbicacion, setPaisesUbicacion] = useState<PaisUbicacion[]>([]);
@@ -234,6 +236,14 @@ export default function HomeScreen() {
       return;
     }
     await Linking.openURL(mapLink);
+  };
+
+  const openLugarFromMap = (lugar: any) => {
+    setSelectedLugar(lugar);
+    setModalScreen('detail');
+    setModalVisible(true);
+    setCart({});
+    setViewerImage(null);
   };
 
   const handleCartUpdate = (productId: number, product: any, delta: number) => {
@@ -384,68 +394,86 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.listContainer}>
-          <Text style={styles.resultsText}>{filteredLugares.length} {filteredLugares.length === 1 ? 'Lugar exclusivo' : 'Lugares exclusivos'} encontrados</Text>
-
-          <View style={isTablet ? styles.tabletGridContainer : undefined}>
-            {filteredLugares.map((lugar) => {
-              const bgImage = lugar.img1 ? { uri: lugar.img1 } : getImageSource(lugar.imagen);
-              return (
-                <TouchableOpacity
-                  key={lugar.id}
-                  onPress={() => { 
-                    setSelectedLugar(lugar); 
-                    setModalScreen('detail'); // Restablecemos a detalle por defecto
-                    setModalVisible(true); 
-                    setCart({}); 
-                    setViewerImage(null); 
-                  }}
-                  activeOpacity={0.9}
-                  style={[styles.premiumCard, isTablet && styles.tabletCardItem]}
-                >
-                  <View style={styles.cardHeaderWrapper}>
-                    <Image source={bgImage} style={[styles.cardAtmosphereImage, !lugar.img1 && { transform: [{ scale: 1.5 }], opacity: 0.15 }]} resizeMode={lugar.img1 ? "cover" : "contain"} blurRadius={lugar.img1 ? 0 : 10} />
-                    <View style={styles.cardOverlay} />
-                    <View style={styles.cardTopBadges}>
-                      {lugar.descuentos && (
-                        <View style={styles.promoBadge}>
-                          <Text style={styles.promoText}>{lugar.descuentos}</Text>
-                        </View>
-                      )}
-                      <View style={styles.categoryBadge}>
-                        <Text style={styles.categoryBadgeText}>{lugar.categoria}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardBody}>
-                    <View style={styles.logoMedallion}>
-                      <Image source={getImageSource(lugar.imagen)} style={styles.logoImage} resizeMode="contain" />
-                    </View>
-                    <View style={styles.cardInfo}>
-                      <Text style={styles.cardTitle}>{lugar.titulo}</Text>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location-sharp" size={12} color={COLORS.accent} />
-                        <Text style={styles.cardLocation}>{lugar.ciudad} • {lugar.pais}</Text>
-                      </View>
-                      <Text style={styles.cardDesc} numberOfLines={2}>{lugar.descripcion}</Text>
-                      <View style={styles.cardFooterBtn}>
-                        <Text style={styles.btnText}>Explorar</Text>
-                        <Ionicons name="arrow-forward" size={14} color={COLORS.textSec} />
-                      </View>
-                    </View>
-                  </View>
-                  <TouchableOpacity style={styles.favoriteBtn} onPress={(e) => { e.stopPropagation(); toggleFavorite(lugar.id.toString()); }}>
-                    <Ionicons name={isFavorite(lugar.id.toString()) ? "heart" : "heart-outline"} size={22} color={isFavorite(lugar.id.toString()) ? "#ff4d4f" : "#fff"} />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-          {filteredLugares.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons name="planet-outline" size={40} color={COLORS.border} />
-              <Text style={styles.emptyText}>No hay resultados en esta zona.</Text>
+          <View style={styles.listHeaderRow}>
+            <Text style={styles.resultsText}>{filteredLugares.length} {filteredLugares.length === 1 ? 'Lugar exclusivo' : 'Lugares exclusivos'} encontrados</Text>
+            <View style={styles.viewModeToggle}>
+              <TouchableOpacity style={[styles.viewModeBtn, viewMode === 'list' && styles.viewModeBtnActive]} onPress={() => setViewMode('list')}>
+                <Ionicons name="list" size={14} color={viewMode === 'list' ? '#000' : COLORS.textSec} />
+                <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>Lista</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.viewModeBtn, viewMode === 'map' && styles.viewModeBtnActive]} onPress={() => setViewMode('map')}>
+                <Ionicons name="map" size={14} color={viewMode === 'map' ? '#000' : COLORS.textSec} />
+                <Text style={[styles.viewModeText, viewMode === 'map' && styles.viewModeTextActive]}>Mapa</Text>
+              </TouchableOpacity>
             </View>
+          </View>
+
+          {viewMode === 'map' ? (
+            <CompanyMap lugares={filteredLugares} height={Math.round(height * 0.6)} onMarkerPress={openLugarFromMap} />
+          ) : (
+            <>
+            <View style={isTablet ? styles.tabletGridContainer : undefined}>
+              {filteredLugares.map((lugar) => {
+                const bgImage = lugar.img1 ? { uri: lugar.img1 } : getImageSource(lugar.imagen);
+                return (
+                  <TouchableOpacity
+                    key={lugar.id}
+                    onPress={() => {
+                      setSelectedLugar(lugar);
+                      setModalScreen('detail'); // Restablecemos a detalle por defecto
+                      setModalVisible(true);
+                      setCart({});
+                      setViewerImage(null);
+                    }}
+                    activeOpacity={0.9}
+                    style={[styles.premiumCard, isTablet && styles.tabletCardItem]}
+                  >
+                    <View style={styles.cardHeaderWrapper}>
+                      <Image source={bgImage} style={[styles.cardAtmosphereImage, !lugar.img1 && { transform: [{ scale: 1.5 }], opacity: 0.15 }]} resizeMode={lugar.img1 ? "cover" : "contain"} blurRadius={lugar.img1 ? 0 : 10} />
+                      <View style={styles.cardOverlay} />
+                      <View style={styles.cardTopBadges}>
+                        {lugar.descuentos && (
+                          <View style={styles.promoBadge}>
+                            <Text style={styles.promoText}>{lugar.descuentos}</Text>
+                          </View>
+                        )}
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryBadgeText}>{lugar.categoria}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardBody}>
+                      <View style={styles.logoMedallion}>
+                        <Image source={getImageSource(lugar.imagen)} style={styles.logoImage} resizeMode="contain" />
+                      </View>
+                      <View style={styles.cardInfo}>
+                        <Text style={styles.cardTitle}>{lugar.titulo}</Text>
+                        <View style={styles.locationRow}>
+                          <Ionicons name="location-sharp" size={12} color={COLORS.accent} />
+                          <Text style={styles.cardLocation}>{lugar.ciudad} • {lugar.pais}</Text>
+                        </View>
+                        <Text style={styles.cardDesc} numberOfLines={2}>{lugar.descripcion}</Text>
+                        <View style={styles.cardFooterBtn}>
+                          <Text style={styles.btnText}>Explorar</Text>
+                          <Ionicons name="arrow-forward" size={14} color={COLORS.textSec} />
+                        </View>
+                      </View>
+                    </View>
+                    <TouchableOpacity style={styles.favoriteBtn} onPress={(e) => { e.stopPropagation(); toggleFavorite(lugar.id.toString()); }}>
+                      <Ionicons name={isFavorite(lugar.id.toString()) ? "heart" : "heart-outline"} size={22} color={isFavorite(lugar.id.toString()) ? "#ff4d4f" : "#fff"} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+            {filteredLugares.length === 0 && (
+              <View style={styles.emptyState}>
+                <Ionicons name="planet-outline" size={40} color={COLORS.border} />
+                <Text style={styles.emptyText}>No hay resultados en esta zona.</Text>
+              </View>
+            )}
+            </>
           )}
         </View>
       </ScrollView>
@@ -621,7 +649,13 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#000', fontFamily: FONTS.textBold },
 
   listContainer: { paddingHorizontal: 24 },
-  resultsText: { color: COLORS.textSec, fontSize: 11, marginBottom: 20, fontFamily: FONTS.textMedium, opacity: 0.6, textAlign: 'center' },
+  listHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  resultsText: { color: COLORS.textSec, fontSize: 11, fontFamily: FONTS.textMedium, opacity: 0.6, textAlign: 'center', flexShrink: 1 },
+  viewModeToggle: { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderRadius: 20, padding: 3, borderWidth: 1, borderColor: COLORS.border },
+  viewModeBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, gap: 4 },
+  viewModeBtnActive: { backgroundColor: COLORS.accent },
+  viewModeText: { fontSize: 11, color: COLORS.textSec, fontFamily: FONTS.textMedium },
+  viewModeTextActive: { color: '#000', fontFamily: FONTS.textBold },
   tabletGridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   tabletCardItem: { width: '48%' },
 
