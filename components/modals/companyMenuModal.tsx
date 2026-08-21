@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -32,6 +33,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
     const [deliveryNote, setDeliveryNote] = useState('');
     const [orderType, setOrderType] = useState<'Domicilio' | 'Establecimiento'>('Domicilio');
     const [deliveryAddress, setDeliveryAddress] = useState('');
+    const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
     useEffect(() => {
         const fetchProducts = async () => {
@@ -73,14 +75,54 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
     const descuentoTotal = subtotal * (descPercent / 100);
     const totalPagado = subtotal - descuentoTotal;
 
-    // --- FUNCIÓN PARA ABRIR GOOGLE MAPS ---
-    const openGoogleMaps = async () => {
-        const mapsUrl = 'https://maps.google.com';
-        const supported = await Linking.canOpenURL(mapsUrl);
-        if (supported) {
-            await Linking.openURL(mapsUrl);
-        } else {
-            Alert.alert("Error", "No se pudo abrir Google Maps.");
+    // --- FUNCIÓN PARA OBTENER Y COMPARTIR UBICACIÓN ---
+    const handleShareLocation = async () => {
+        setIsFetchingLocation(true);
+        try {
+            // Solicita permisos al usuario (si ya los tiene, simplemente avanza)
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert(
+                    "Permiso denegado", 
+                    "Necesitamos acceso a tu ubicación para pegarla automáticamente. Puedes ingresarla manualmente si lo prefieres."
+                );
+                setIsFetchingLocation(false);
+                return;
+            }
+
+            // Obtiene la ubicación actual con alta precisión
+            const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Highest
+            });
+
+            const { latitude, longitude } = location.coords;
+            const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+
+            // Opcional: Intenta obtener el nombre de la calle (Geocodificación inversa)
+            let addressText = '';
+            try {
+                const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+                if (geocode && geocode.length > 0) {
+                    const place = geocode[0];
+                    addressText = `${place.street || ''} ${place.streetNumber || ''}, ${place.city || ''}`.trim();
+                    if (addressText.startsWith(',')) addressText = addressText.substring(1).trim();
+                }
+            } catch (e) {
+                console.log("No se pudo obtener el nombre de la calle", e);
+            }
+
+            // Pega la ubicación en el estado del Input
+            const finalAddressText = addressText 
+                ? `${addressText}\nGPS: ${mapsLink}` 
+                : `Ubicación GPS: ${mapsLink}`;
+            
+            setDeliveryAddress(finalAddressText);
+
+        } catch (error) {
+            console.error("Error obteniendo ubicación:", error);
+            Alert.alert("Error", "Ocurrió un problema al obtener tu ubicación. Por favor, revisa que tu GPS esté encendido.");
+        } finally {
+            setIsFetchingLocation(false);
         }
     };
 
@@ -101,7 +143,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
 
         mensaje += `📍 *Tipo de orden:* ${orderType === 'Domicilio' ? '🛵 Domicilio' : '🍽️ Consumir en el establecimiento'}\n`;
         if (orderType === 'Domicilio' && deliveryAddress.trim() !== '') {
-            mensaje += `🏠 *Dirección:* ${deliveryAddress.trim()}\n`;
+            mensaje += `🏠 *Dirección:*\n${deliveryAddress.trim()}\n\n`;
         }
 
         if (deliveryNote.trim() !== '') {
@@ -273,19 +315,31 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                             <View style={{ marginTop: 15 }}>
                                 <View style={styles.addressHeaderRow}>
                                     <Text style={styles.noteSectionTitle}>DIRECCIÓN DE ENTREGA</Text>
-                                    <TouchableOpacity style={styles.mapsButtonSmall} onPress={openGoogleMaps} activeOpacity={0.8}>
-                                        <Ionicons name="map" size={14} color="#01c38e" style={{ marginRight: 4 }} />
-                                        <Text style={styles.mapsButtonSmallText}>Abrir Google Maps</Text>
+                                    <TouchableOpacity 
+                                        style={styles.mapsButtonSmall} 
+                                        onPress={handleShareLocation} 
+                                        activeOpacity={0.8}
+                                        disabled={isFetchingLocation}
+                                    >
+                                        {isFetchingLocation ? (
+                                            <ActivityIndicator size="small" color="#01c38e" />
+                                        ) : (
+                                            <>
+                                                <Ionicons name="location" size={14} color="#01c38e" style={{ marginRight: 4 }} />
+                                                <Text style={styles.mapsButtonSmallText}>Usar mi ubicación</Text>
+                                            </>
+                                        )}
                                     </TouchableOpacity>
                                 </View>
                                 <TextInput
-                                    style={styles.textInputNote}
+                                    style={[styles.textInputNote, { height: 85, textAlignVertical: 'top' }]}
                                     placeholder="Ej: Calle 45 #20-10, Apto 302..."
                                     placeholderTextColor="#9ca3af"
                                     value={deliveryAddress}
                                     onChangeText={setDeliveryAddress}
+                                    multiline
                                 />
-                                <Text style={styles.addressTip}>Puedes abrir Google Maps para verificar tu ubicación exacta y copiarla aquí.</Text>
+                                <Text style={styles.addressTip}>Toca "Usar mi ubicación" para pegar tu enlace de GPS automáticamente o escribe tu dirección.</Text>
                             </View>
                         )}
                     </View>
@@ -399,7 +453,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                                 style={styles.nextStepBtn} 
                                 onPress={() => {
                                     if (orderType === 'Domicilio' && !deliveryAddress.trim()) {
-                                        Alert.alert("Dirección requerida", "Por favor ingresa la dirección de entrega.");
+                                        Alert.alert("Dirección requerida", "Por favor ingresa la dirección de entrega o usa tu ubicación.");
                                         return;
                                     }
                                     setStep(4);
