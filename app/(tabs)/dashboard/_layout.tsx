@@ -182,6 +182,18 @@ export default function TabLayout() {
             />
 
             <Tabs.Screen
+                name="notificaciones"
+                options={{
+                    title: 'Notificaciones',
+                    tabBarLabel: 'Notifs',
+                    href: !adminState ? null : undefined,
+                    tabBarIcon: ({ color, focused }) => (
+                        <Ionicons name={focused ? "notifications" : "notifications-outline"} size={normalize(22)} color={color} />
+                    ),
+                }}
+            />
+
+            <Tabs.Screen
                 name="close"
                 options={{
                     title: 'Salir',

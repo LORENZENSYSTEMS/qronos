@@ -5,6 +5,7 @@ import { useNavigation, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CompanyMap from '../../../components/maps/CompanyMap';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -58,7 +59,14 @@ interface Lugar {
     img1?: string | null;
     img2?: string | null;
     img3?: string | null;
+    lat?: number | null;
+    lng?: number | null;
 }
+
+const parseCoord = (value: any): number | null => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+};
 
 export default function GuestIndex() {
     const router = useRouter();
@@ -79,6 +87,7 @@ export default function GuestIndex() {
     const [selectedLugar, setSelectedLugar] = useState<Lugar | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<Category>('Todos');
+    const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
     const [selectedCountry, setSelectedCountry] = useState<string>('Colombia');
     const [isCountryMenuOpen, setIsCountryMenuOpen] = useState(false);
     const [selectedCity, setSelectedCity] = useState<string>('Todas');
@@ -118,6 +127,8 @@ export default function GuestIndex() {
                 img1: item.fotoDescripcion1,
                 img2: item.fotoDescripcion2,
                 img3: item.fotoDescripcion3,
+                lat: parseCoord(item.lat ?? item.latitud ?? item.latitude),
+                lng: parseCoord(item.lng ?? item.longitud ?? item.lon ?? item.longitude),
             }));
 
             setLugares(formattedData);
@@ -350,10 +361,26 @@ export default function GuestIndex() {
 
                 {/* LISTA DE EMPRESAS */}
                 <View style={styles.listContainer}>
-                    <Text style={styles.resultsText}>
-                        {filteredLugares.length} {filteredLugares.length === 1 ? 'Empresa disponible' : 'Empresas disponibles'}
-                    </Text>
+                    <View style={styles.listHeaderRow}>
+                        <Text style={styles.resultsText}>
+                            {filteredLugares.length} {filteredLugares.length === 1 ? 'Empresa disponible' : 'Empresas disponibles'}
+                        </Text>
+                        <View style={styles.viewModeToggle}>
+                            <TouchableOpacity style={[styles.viewModeBtn, viewMode === 'list' && styles.viewModeBtnActive]} onPress={() => setViewMode('list')}>
+                                <Ionicons name="list" size={14} color={viewMode === 'list' ? '#000' : COLORS.textSec} />
+                                <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>Lista</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.viewModeBtn, viewMode === 'map' && styles.viewModeBtnActive]} onPress={() => setViewMode('map')}>
+                                <Ionicons name="map" size={14} color={viewMode === 'map' ? '#000' : COLORS.textSec} />
+                                <Text style={[styles.viewModeText, viewMode === 'map' && styles.viewModeTextActive]}>Mapa</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
+                    {viewMode === 'map' ? (
+                        <CompanyMap lugares={filteredLugares} height={Math.round(screenHeight * 0.6)} onMarkerPress={(lugar) => { setSelectedLugar(lugar); setModalVisible(true); }} />
+                    ) : (
+                        <>
                     {filteredLugares.map((lugar) => {
                         const bgImage = lugar.img1 ? { uri: lugar.img1 } : getImageSource(lugar.imagen);
 
@@ -424,6 +451,8 @@ export default function GuestIndex() {
                             <Ionicons name="planet-outline" size={40} color={COLORS.border} />
                             <Text style={styles.emptyText}>No hay empresas en esta zona.</Text>
                         </View>
+                    )}
+                        </>
                     )}
                 </View>
             </ScrollView>
@@ -532,7 +561,13 @@ const styles = StyleSheet.create({
     tabTextActive: { color: '#000', fontFamily: FONTS.textBold },
 
     listContainer: { paddingHorizontal: 24 },
-    resultsText: { color: COLORS.textSec, fontSize: 11, marginBottom: 20, fontFamily: FONTS.textMedium, opacity: 0.6, textAlign: 'center' },
+    listHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+    resultsText: { color: COLORS.textSec, fontSize: 11, fontFamily: FONTS.textMedium, opacity: 0.6, textAlign: 'center', flexShrink: 1 },
+    viewModeToggle: { flexDirection: 'row', backgroundColor: '#1a1d24', borderRadius: 20, padding: 3, borderWidth: 1, borderColor: COLORS.border },
+    viewModeBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, gap: 4 },
+    viewModeBtnActive: { backgroundColor: COLORS.accent },
+    viewModeText: { fontSize: 11, color: COLORS.textSec, fontFamily: FONTS.textMedium },
+    viewModeTextActive: { color: '#000', fontFamily: FONTS.textBold },
 
     premiumCard: {
         backgroundColor: COLORS.cardBg,

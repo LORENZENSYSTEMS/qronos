@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useState } from "react";
@@ -99,6 +100,7 @@ export default function CompanyScreen() {
     const [totalScans, setTotalScans] = useState<number | null>(null);
     const [totalPoints, setTotalPoints] = useState<number | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLocating, setIsLocating] = useState(false);
     
     // --- ESTADO PARA EL MODAL DE GESTIÓN DE MESAS Y RESERVAS ---
     const [gestionModalVisible, setGestionModalVisible] = useState(false);
@@ -133,6 +135,8 @@ export default function CompanyScreen() {
         pais: '',
         ciudad: '',
         categoria: 'Restaurantes',
+        lat: '' as string,
+        lng: '' as string,
         fotoPerfil: null as string | null,
         fotoDescripcion1: null as string | null,
         fotoDescripcion2: null as string | null,
@@ -236,6 +240,8 @@ export default function CompanyScreen() {
                     pais: data.pais || '',
                     ciudad: data.ciudad || '',
                     categoria: finalCat,
+                    lat: data.lat != null ? String(data.lat) : '',
+                    lng: data.lng != null ? String(data.lng) : '',
                     fotoPerfil: data.fotoPerfil || null,
                     fotoDescripcion1: data.fotoDescripcion1 || null,
                     fotoDescripcion2: data.fotoDescripcion2 || null,
@@ -330,6 +336,50 @@ export default function CompanyScreen() {
 
         if (!result.canceled) {
             setFormData(prev => ({ ...prev, [field]: result.assets[0].uri }));
+        }
+    };
+
+    const obtenerUbicacion = async () => {
+        if (!empresaId) return;
+
+        setIsLocating(true);
+        try {
+            const API_URL = process.env.EXPO_PUBLIC_API_URL;
+            const token = await SecureStore.getItemAsync('jwt');
+
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert("Permiso requerido", "Se necesita acceso a tu ubicación para guardar la posición de tu empresa.");
+                return;
+            }
+
+            const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const lat = Number(position.coords.latitude.toFixed(4));
+            const lng = Number(position.coords.longitude.toFixed(4));
+
+            const response = await fetch(`${API_URL}/api/empresa/${empresaId}/ubicacion`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ lat, lng })
+            });
+
+            if (response.ok) {
+                setFormData(prev => ({ ...prev, lat: String(lat), lng: String(lng) }));
+                Alert.alert("Éxito", `Ubicación guardada: ${lat}, ${lng}`);
+            } else if (response.status === 404) {
+                Alert.alert("Error", "No se encontró la empresa.");
+            } else {
+                const err = await response.json().catch(() => null);
+                Alert.alert("Error", err?.message || "No se pudo guardar la ubicación.");
+            }
+        } catch (error) {
+            console.error("Error obteniendo ubicación:", error);
+            Alert.alert("Error", "No se pudo obtener la ubicación. Verifica que el GPS esté activo.");
+        } finally {
+            setIsLocating(false);
         }
     };
 
@@ -559,6 +609,32 @@ export default function CompanyScreen() {
                             value={formData.ubicacionMaps}
                             onChangeText={(t) => setFormData({ ...formData, ubicacionMaps: t })}
                         />
+
+                        <Text style={styles.label}>Ubicación GPS</Text>
+                        <View style={styles.locationBox}>
+                            <View style={styles.locationInfo}>
+                                <Ionicons name="location-outline" size={18} color={COLORS.accent} />
+                                <Text style={styles.locationText}>
+                                    {formData.lat && formData.lng
+                                        ? `Ubicación actual: ${formData.lat}, ${formData.lng}`
+                                        : "Aún no has registrado tu ubicación."}
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                style={styles.locationBtn}
+                                onPress={obtenerUbicacion}
+                                disabled={isLocating}
+                            >
+                                {isLocating ? (
+                                    <ActivityIndicator color="#000" size="small" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="navigate" size={18} color="#000" />
+                                        <Text style={styles.locationBtnText}>OBTENER UBICACIÓN</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
 
                         <Text style={styles.label}>Número de WhatsApp (Incluye código de país)</Text>
                         <TextInput
@@ -1000,6 +1076,40 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         resizeMode: 'cover'
+    },
+    locationBox: {
+        backgroundColor: COLORS.cardBg,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 16,
+    },
+    locationInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 12,
+    },
+    locationText: {
+        color: COLORS.textSec,
+        fontFamily: FONTS.textRegular,
+        fontSize: 13,
+        flex: 1,
+    },
+    locationBtn: {
+        backgroundColor: COLORS.accent,
+        borderRadius: 12,
+        paddingVertical: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    locationBtnText: {
+        color: '#000',
+        fontFamily: FONTS.textBold,
+        fontSize: 13,
     },
     placeholderGallery: {
         alignItems: 'center',

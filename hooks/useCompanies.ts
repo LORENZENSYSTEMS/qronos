@@ -16,9 +16,16 @@ export interface Lugar {
     img1?: string | null;
     img2?: string | null;
     img3?: string | null;
+    lat?: number | null;
+    lng?: number | null;
     horarioApertura?: string;
     horarioCierre?: string;
 }
+
+const parseCoord = (value: any): number | null => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+};
 
 const fetchCompanies = async (): Promise<Lugar[]> => {
     const baseUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -55,6 +62,8 @@ const fetchCompanies = async (): Promise<Lugar[]> => {
         img1: item.fotoDescripcion1,
         img2: item.fotoDescripcion2,
         img3: item.fotoDescripcion3,
+        lat: parseCoord(item.lat ?? item.latitud ?? item.latitude),
+        lng: parseCoord(item.lng ?? item.longitud ?? item.lon ?? item.longitude),
         horarioApertura: item.horarioApertura,
         horarioCierre: item.horarioCierre,
     }));

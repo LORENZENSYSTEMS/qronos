@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // --- COMPONENTES Y HOOKS ---
+import CompanyMap from '../../../components/maps/CompanyMap';
 import CompanyMenuModal from '../../../components/modals/companyMenuModal';
 import CompanyReservationModal from '../../../components/modals/companyReservationModal'; // <-- NUEVO MODAL DE RESERVAS
 import { useCompanies } from '../../../hooks/useCompanies';
@@ -89,7 +90,7 @@ export default function HomeScreen() {
   const navigator: any = useNavigation();
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isTablet = width >= 768;
 
   const { data: stores, isLoading: loadingStores, refetch: refetchStores, isFetching } = useCompanies();
@@ -106,6 +107,7 @@ export default function HomeScreen() {
   const [selectedLugar, setSelectedLugar] = useState<Lugar | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category>('Todos');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [selectedCountry, setSelectedCountry] = useState<string>('Colombia');
   const [selectedCity, setSelectedCity] = useState<string>('Todas');
   const [paisesUbicacion, setPaisesUbicacion] = useState<PaisUbicacion[]>([]);
@@ -115,6 +117,7 @@ export default function HomeScreen() {
   
   // Modificamos para soportar la pantalla 'reservation'
   const [modalScreen, setModalScreen] = useState<'detail' | 'menu' | 'reservation'>('detail');
+  const [cart, setCart] = useState<Record<number, any>>({});
 
   const [fontsLoaded] = useFonts({
     'Heavitas': require('../../../assets/fonts/Heavitas.ttf'),
@@ -182,6 +185,66 @@ export default function HomeScreen() {
       return;
     }
     await Linking.openURL(mapLink);
+  };
+
+  const openLugarFromMap = (lugar: any) => {
+    setSelectedLugar(lugar);
+    setModalScreen('detail');
+    setModalVisible(true);
+    setCart({});
+    setViewerImage(null);
+  };
+
+  const handleCartUpdate = (productId: number, product: any, delta: number) => {
+    setCart(prev => {
+      const currentQty = prev[productId]?.cantidad || 0;
+      const newQty = Math.max(0, currentQty + delta);
+      if (newQty === 0) {
+        const { [productId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [productId]: { ...product, cantidad: newQty } };
+    });
+  };
+
+  // --- CÁLCULOS DEL TOTAL ---
+  const cartArray = Object.values(cart);
+  const subtotal = cartArray.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+  const descMatch = selectedLugar?.descuentos?.match(/\d+/);
+  const descPercent = descMatch ? parseInt(descMatch[0]) : 0;
+  const descuentoTotal = subtotal * (descPercent / 100);
+  const totalPagado = subtotal - descuentoTotal;
+
+  const sendOrderWhatsApp = async (lugar: any) => {
+    if (cartArray.length === 0) {
+      Alert.alert("Carrito vacío", "Debes agregar productos para enviar una orden.");
+      return;
+    }
+    if (!lugar.whatsapp) {
+      Alert.alert("Aviso", "Esta empresa no ha registrado número de WhatsApp.");
+      return;
+    }
+
+    const orderId = Math.floor(10000 + Math.random() * 90000);
+    let mensaje = `*NUEVA ORDEN DESDE QRONNOS*\n`;
+    mensaje += `👤 *Cliente:* ${userName}\n`;
+    mensaje += `(ID: #${orderId})\n\n`;
+    mensaje += `*PEDIDO:*\n`;
+    cartArray.forEach(item => {
+      mensaje += `• (${item.cantidad}) ${item.nombre} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
+    });
+    mensaje += `\n*RESUMEN:*\n`;
+    mensaje += `• Subtotal: $${subtotal.toLocaleString()}\n`;
+    if (descPercent > 0) {
+      mensaje += `• Desc. Qronnos (${descPercent}%): -$${descuentoTotal.toLocaleString()}\n`;
+    }
+    mensaje += `\n✅ *TOTAL A PAGAR: $${totalPagado.toLocaleString()}*`;
+
+    const cleanPhone = lugar.whatsapp.replace(/[^\d]/g, '');
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(mensaje)}`;
+    const supported = await Linking.canOpenURL(url);
+    if (supported) await Linking.openURL(url);
+    else Alert.alert("Error", "No se pudo abrir WhatsApp.");
   };
 
   const getImageSource = (img: string | null | undefined) => {
@@ -280,119 +343,86 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.listContainer}>
-          <Text style={styles.resultsText}>{filteredLugares.length} {filteredLugares.length === 1 ? 'Lugar exclusivo' : 'Lugares exclusivos'} encontrados</Text>
+          <View style={styles.listHeaderRow}>
+            <Text style={styles.resultsText}>{filteredLugares.length} {filteredLugares.length === 1 ? 'Lugar exclusivo' : 'Lugares exclusivos'} encontrados</Text>
+            <View style={styles.viewModeToggle}>
+              <TouchableOpacity style={[styles.viewModeBtn, viewMode === 'list' && styles.viewModeBtnActive]} onPress={() => setViewMode('list')}>
+                <Ionicons name="list" size={14} color={viewMode === 'list' ? '#000' : COLORS.textSec} />
+                <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>Lista</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.viewModeBtn, viewMode === 'map' && styles.viewModeBtnActive]} onPress={() => setViewMode('map')}>
+                <Ionicons name="map" size={14} color={viewMode === 'map' ? '#000' : COLORS.textSec} />
+                <Text style={[styles.viewModeText, viewMode === 'map' && styles.viewModeTextActive]}>Mapa</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          <View style={isTablet ? styles.tabletGridContainer : undefined}>
-            {filteredLugares.map((lugar) => {
-              const bgImage = lugar.img1 ? { uri: lugar.img1 } : getImageSource(lugar.imagen);
-              return (
-                <TouchableOpacity
-                  key={lugar.id}
-                  onPress={() => { 
-                    setSelectedLugar(lugar); 
-                    setModalScreen('detail'); 
-                    setModalVisible(true); 
-                    setViewerImage(null); 
-                  }}
-                  activeOpacity={0.9}
-                  style={[styles.premiumCard, isTablet && styles.tabletCardItem]}
-                >
-                  <View style={styles.cardHeaderWrapper}>
-                    <Image source={bgImage} style={[styles.cardAtmosphereImage, !lugar.img1 && { transform: [{ scale: 1.5 }], opacity: 0.15 }]} resizeMode={lugar.img1 ? "cover" : "contain"} blurRadius={lugar.img1 ? 0 : 10} />
-                    <View style={styles.cardOverlay} />
-                    <View style={styles.cardTopBadges}>
-                      {lugar.descuentos ? (
-                        <View style={styles.promoBadge}>
-                          <Text style={styles.promoText}>{lugar.descuentos}</Text>
-                        </View>
-                      ) : <View />}
-                      <View style={styles.topRightRow}>
+          {viewMode === 'map' ? (
+            <CompanyMap lugares={filteredLugares} height={Math.round(height * 0.6)} onMarkerPress={openLugarFromMap} />
+          ) : (
+            <>
+            <View style={isTablet ? styles.tabletGridContainer : undefined}>
+              {filteredLugares.map((lugar) => {
+                const bgImage = lugar.img1 ? { uri: lugar.img1 } : getImageSource(lugar.imagen);
+                return (
+                  <TouchableOpacity
+                    key={lugar.id}
+                    onPress={() => {
+                      setSelectedLugar(lugar);
+                      setModalScreen('detail'); // Restablecemos a detalle por defecto
+                      setModalVisible(true);
+                      setCart({});
+                      setViewerImage(null);
+                    }}
+                    activeOpacity={0.9}
+                    style={[styles.premiumCard, isTablet && styles.tabletCardItem]}
+                  >
+                    <View style={styles.cardHeaderWrapper}>
+                      <Image source={bgImage} style={[styles.cardAtmosphereImage, !lugar.img1 && { transform: [{ scale: 1.5 }], opacity: 0.15 }]} resizeMode={lugar.img1 ? "cover" : "contain"} blurRadius={lugar.img1 ? 0 : 10} />
+                      <View style={styles.cardOverlay} />
+                      <View style={styles.cardTopBadges}>
+                        {lugar.descuentos && (
+                          <View style={styles.promoBadge}>
+                            <Text style={styles.promoText}>{lugar.descuentos}</Text>
+                          </View>
+                        )}
                         <View style={styles.categoryBadge}>
                           <Text style={styles.categoryBadgeText}>{lugar.categoria}</Text>
                         </View>
-                        <TouchableOpacity style={styles.favoriteBtnInline} onPress={(e) => { e.stopPropagation(); toggleFavorite(lugar.id.toString()); }}>
-                          <Ionicons name={isFavorite(lugar.id.toString()) ? "heart" : "heart-outline"} size={20} color={isFavorite(lugar.id.toString()) ? "#ff4d4f" : "#fff"} />
-                        </TouchableOpacity>
                       </View>
                     </View>
-                  </View>
 
-                  <View style={styles.cardBody}>
-                    <View style={styles.logoMedallion}>
-                      <Image source={getImageSource(lugar.imagen)} style={styles.logoImage} resizeMode="contain" />
-                    </View>
-                    <View style={styles.cardInfo}>
-                      <Text style={styles.cardTitle}>{lugar.titulo}</Text>
-                      
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location-sharp" size={13} color={COLORS.accent} />
-                        <Text style={styles.cardLocation}>{lugar.ciudad} • {lugar.pais}</Text>
+                    <View style={styles.cardBody}>
+                      <View style={styles.logoMedallion}>
+                        <Image source={getImageSource(lugar.imagen)} style={styles.logoImage} resizeMode="contain" />
                       </View>
-
-                      <View style={styles.scheduleRow}>
-                        <Ionicons name="time-outline" size={13} color={COLORS.textSec} />
-                        <Text style={styles.cardSchedule}>
-                          {lugar.horarioApertura && lugar.horarioCierre
-                            ? `Hoy: ${lugar.horarioApertura} - ${lugar.horarioCierre}`
-                            : 'Horario no disponible'}
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.cardFooterRow}>
-                        <TouchableOpacity 
-                          style={styles.verDetallesBtn}
-                          onPress={() => { 
-                            setSelectedLugar(lugar); 
-                            setModalScreen('detail'); 
-                            setModalVisible(true); 
-                            setViewerImage(null); 
-                          }}
-                        >
-                          <Text style={styles.verDetallesText}>Ver detalles</Text>
-                          <Ionicons name="arrow-forward" size={13} color={COLORS.text} style={{ marginLeft: 4 }} />
-                        </TouchableOpacity>
-
-                        <View style={styles.cardActionButtons}>
-                          {/* BOTÓN EXTERNO DE RESERVAR -> ABRE EL MÓDULO DE RESERVAS DIRECTAMENTE */}
-                          <TouchableOpacity 
-                            style={styles.reservarMesaBtn}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              setSelectedLugar(lugar);
-                              setModalScreen('reservation');
-                              setModalVisible(true);
-                            }}
-                          >
-                            <Ionicons name="calendar-outline" size={13} color="#000" />
-                            <Text style={styles.reservarMesaText} numberOfLines={1}>Reservar</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity 
-                            style={styles.pedirDomicilioBtn}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              setSelectedLugar(lugar);
-                              setModalScreen('menu');
-                              setModalVisible(true);
-                            }}
-                          >
-                            <Ionicons name="bicycle-outline" size={13} color="#000" />
-                            <Text style={styles.pedirDomicilioText} numberOfLines={1}>Domicilio</Text>
-                          </TouchableOpacity>
+                      <View style={styles.cardInfo}>
+                        <Text style={styles.cardTitle}>{lugar.titulo}</Text>
+                        <View style={styles.locationRow}>
+                          <Ionicons name="location-sharp" size={12} color={COLORS.accent} />
+                          <Text style={styles.cardLocation}>{lugar.ciudad} • {lugar.pais}</Text>
+                        </View>
+                        <Text style={styles.cardDesc} numberOfLines={2}>{lugar.descripcion}</Text>
+                        <View style={styles.cardFooterBtn}>
+                          <Text style={styles.btnText}>Explorar</Text>
+                          <Ionicons name="arrow-forward" size={14} color={COLORS.textSec} />
                         </View>
                       </View>
-
                     </View>
-                  </View>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-          {filteredLugares.length === 0 && (
-            <View style={styles.emptyState}>
-              <Ionicons name="planet-outline" size={40} color={COLORS.border} />
-              <Text style={styles.emptyText}>No hay resultados en esta zona.</Text>
+                    <TouchableOpacity style={styles.favoriteBtn} onPress={(e) => { e.stopPropagation(); toggleFavorite(lugar.id.toString()); }}>
+                      <Ionicons name={isFavorite(lugar.id.toString()) ? "heart" : "heart-outline"} size={22} color={isFavorite(lugar.id.toString()) ? "#ff4d4f" : "#fff"} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                )
+              })}
             </View>
+            {filteredLugares.length === 0 && (
+              <View style={styles.emptyState}>
+                <Ionicons name="planet-outline" size={40} color={COLORS.border} />
+                <Text style={styles.emptyText}>No hay resultados en esta zona.</Text>
+              </View>
+            )}
+            </>
           )}
         </View>
       </ScrollView>
@@ -554,7 +584,13 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#000', fontFamily: FONTS.textBold },
 
   listContainer: { paddingHorizontal: 24 },
-  resultsText: { color: COLORS.textSec, fontSize: 11, marginBottom: 20, fontFamily: FONTS.textMedium, opacity: 0.6, textAlign: 'center' },
+  listHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  resultsText: { color: COLORS.textSec, fontSize: 11, fontFamily: FONTS.textMedium, opacity: 0.6, textAlign: 'center', flexShrink: 1 },
+  viewModeToggle: { flexDirection: 'row', backgroundColor: COLORS.cardBg, borderRadius: 20, padding: 3, borderWidth: 1, borderColor: COLORS.border },
+  viewModeBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, gap: 4 },
+  viewModeBtnActive: { backgroundColor: COLORS.accent },
+  viewModeText: { fontSize: 11, color: COLORS.textSec, fontFamily: FONTS.textMedium },
+  viewModeTextActive: { color: '#000', fontFamily: FONTS.textBold },
   tabletGridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   tabletCardItem: { width: '48%' },
 
@@ -569,6 +605,7 @@ const styles = StyleSheet.create({
   categoryBadge: { backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   categoryBadgeText: { color: '#fff', fontSize: 10, fontFamily: FONTS.textBold, textTransform: 'uppercase', letterSpacing: 0.5 },
   favoriteBtnInline: { backgroundColor: 'rgba(0,0,0,0.6)', padding: 7, borderRadius: 20, marginLeft: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  favoriteBtn: { position: 'absolute', top: 15, right: 15, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
 
   cardBody: { paddingHorizontal: 20, paddingBottom: 20, marginTop: -40 },
   logoMedallion: { width: 80, height: 80, borderRadius: 25, backgroundColor: '#1E2129', justifyContent: 'center', alignItems: 'center', alignSelf: 'flex-start', borderWidth: 4, borderColor: COLORS.cardBg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8, marginBottom: 12 },
@@ -577,6 +614,9 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 20, color: '#fff', fontFamily: FONTS.title, marginBottom: 6, letterSpacing: 0.5 },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   cardLocation: { fontSize: 12, color: COLORS.textSec, fontFamily: FONTS.textRegular, marginLeft: 4 },
+  cardDesc: { fontSize: 13, color: '#8b9bb4', lineHeight: 20, fontFamily: FONTS.textRegular, marginBottom: 15 },
+  cardFooterBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', borderBottomWidth: 1, borderBottomColor: COLORS.accent, paddingBottom: 2 },
+  btnText: { color: '#fff', fontSize: 12, fontFamily: FONTS.textBold, marginRight: 6 },
   
   scheduleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   cardSchedule: { fontSize: 12, color: COLORS.textSec, fontFamily: FONTS.textRegular, marginLeft: 4 },
