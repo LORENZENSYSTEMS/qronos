@@ -84,6 +84,11 @@ interface Lugar {
   img3?: string | null;
   horarioApertura?: string;
   horarioCierre?: string;
+  // --- NUEVOS CAMPOS DE RESERVAS ---
+  mostrar_reservas?: boolean | string | number;
+  mostrarReservas?: boolean | string | number;
+  tipo_reservas?: string;
+  tipoReservas?: string;
 }
 
 export default function HomeScreen() {
@@ -396,19 +401,65 @@ export default function HomeScreen() {
                       <View style={styles.logoMedallion}>
                         <Image source={getImageSource(lugar.imagen)} style={styles.logoImage} resizeMode="contain" />
                       </View>
+                      
                       <View style={styles.cardInfo}>
                         <Text style={styles.cardTitle}>{lugar.titulo}</Text>
+                        
                         <View style={styles.locationRow}>
                           <Ionicons name="location-sharp" size={12} color={COLORS.accent} />
                           <Text style={styles.cardLocation}>{lugar.ciudad} • {lugar.pais}</Text>
                         </View>
-                        <Text style={styles.cardDesc} numberOfLines={2}>{lugar.descripcion}</Text>
-                        <View style={styles.cardFooterBtn}>
-                          <Text style={styles.btnText}>Explorar</Text>
-                          <Ionicons name="arrow-forward" size={14} color={COLORS.textSec} />
+
+                        {/* --- HORA EN QUE LA EMPRESA ESTÁ LABORANDO --- */}
+                        <View style={styles.scheduleRow}>
+                          <Ionicons name="time-outline" size={12} color={COLORS.textSec} />
+                          <Text style={styles.cardSchedule}>
+                            Hoy: {lugar.horarioApertura || '--:--'} - {lugar.horarioCierre || '--:--'}
+                          </Text>
+                        </View>
+
+                        {/* --- FOOTER DE LA CARD CON BOTONES --- */}
+                        <View style={styles.cardFooterRow}>
+                          <View style={styles.verDetallesBtn}>
+                            <Text style={styles.verDetallesText}>Ver detalles</Text>
+                            <Ionicons name="arrow-forward" size={12} color="#fff" style={{ marginLeft: 4 }} />
+                          </View>
+
+                          <View style={styles.cardActionButtons}>
+                            {/* BOTÓN RESERVAR (CONDICIONAL) */}
+                            {(lugar.mostrar_reservas || lugar.mostrarReservas) && (
+                              <TouchableOpacity 
+                                style={styles.reservarMesaBtn}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedLugar(lugar);
+                                  setModalScreen('reservation');
+                                  setModalVisible(true);
+                                }}
+                              >
+                                <Ionicons name="calendar-outline" size={14} color="#000" />
+                                <Text style={styles.reservarMesaText}>Reservar</Text>
+                              </TouchableOpacity>
+                            )}
+
+                            {/* BOTÓN DOMICILIO */}
+                            <TouchableOpacity 
+                              style={styles.pedirDomicilioBtn}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedLugar(lugar);
+                                setModalScreen('menu');
+                                setModalVisible(true);
+                              }}
+                            >
+                              <Ionicons name="bicycle-outline" size={14} color="#000" />
+                              <Text style={styles.pedirDomicilioText}>Domicilio</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </View>
+
                     <TouchableOpacity style={styles.favoriteBtn} onPress={(e) => { e.stopPropagation(); toggleFavorite(lugar.id.toString()); }}>
                       <Ionicons name={isFavorite(lugar.id.toString()) ? "heart" : "heart-outline"} size={22} color={isFavorite(lugar.id.toString()) ? "#ff4d4f" : "#fff"} />
                     </TouchableOpacity>
@@ -509,15 +560,21 @@ export default function HomeScreen() {
                   </View>
                 )}
 
-                {/* BOTÓN RESERVAR ESPACIO */}
-                <TouchableOpacity 
-                  style={styles.btnReservarEspacio}
-                  activeOpacity={0.9}
-                  onPress={() => setModalScreen('reservation')}
-                >
-                  <Ionicons name="calendar" size={20} color="#000" />
-                  <Text style={styles.btnReservarEspacioText}>RESERVAR ESPACIO (MESA / CANCHA)</Text>
-                </TouchableOpacity>
+                {/* BOTÓN RESERVAR ESPACIO (RENDERIZADO CONDICIONAL) */}
+                {(selectedLugar?.mostrar_reservas || selectedLugar?.mostrarReservas) && (
+                  <TouchableOpacity 
+                    style={styles.btnReservarEspacio}
+                    activeOpacity={0.9}
+                    onPress={() => setModalScreen('reservation')}
+                  >
+                    <Ionicons name="calendar" size={20} color="#000" />
+                    <Text style={styles.btnReservarEspacioText}>
+                      {selectedLugar?.tipo_reservas === 'Mesas' || selectedLugar?.tipoReservas === 'Mesas' ? 'RESERVAR MESA' :
+                       selectedLugar?.tipo_reservas === 'Canchas' || selectedLugar?.tipoReservas === 'Canchas' ? 'RESERVAR CANCHA' :
+                       'RESERVAR ESPACIO (MESAS / CANCHAS)'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 {/* BOTÓN VER MENÚ */}
                 <TouchableOpacity 
@@ -623,7 +680,7 @@ const styles = StyleSheet.create({
 
   cardFooterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 14 },
   verDetallesBtn: { flexDirection: 'row', alignItems: 'center' },
-  verDetallesText: { color: '#fff', fontSize: 12, fontFamily: FONTS.textBold, borderBottomWidth: 1, borderBottomColor: COLORS.accent, paddingBottom: 1 },
+  verDetallesText: { color: '#fff', fontSize: 12, fontFamily: FONTS.textBold },
 
   cardActionButtons: { flexDirection: 'row', alignItems: 'center' },
   reservarMesaBtn: { backgroundColor: COLORS.accent, flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 11, borderRadius: 10, marginRight: 8 },

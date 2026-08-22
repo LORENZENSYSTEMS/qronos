@@ -84,6 +84,27 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
     const [showCourtStep, setShowCourtStep] = useState<boolean>(false);
     
+    // --- VALIDACIÓN DE TIPO DE RESERVAS PERMITIDAS POR LA EMPRESA ---
+    const tipoReservasConfig = useMemo(() => {
+        return (
+            empresa?.tipo_reservas || 
+            empresa?.tipoReservas || 
+            empresa?.tipo_reserva || 
+            empresa?.tipoReserva || 
+            ''
+        ).toString().toLowerCase();
+    }, [empresa]);
+
+    const showMesaOption = useMemo(() => {
+        if (!tipoReservasConfig) return true; // Por defecto si no está especificado, mostrar ambos
+        return tipoReservasConfig.includes('mesa') || tipoReservasConfig.includes('ambas') || tipoReservasConfig.includes('ambos');
+    }, [tipoReservasConfig]);
+
+    const showCanchaOption = useMemo(() => {
+        if (!tipoReservasConfig) return true; // Por defecto si no está especificado, mostrar ambos
+        return tipoReservasConfig.includes('cancha') || tipoReservasConfig.includes('ambas') || tipoReservasConfig.includes('ambos');
+    }, [tipoReservasConfig]);
+
     const calendarData = getMonthCalendarGrid();
     const validFirstDay = calendarData.days.find(d => !d.empty && !d.isPast)?.dateString || new Date().toISOString().split('T')[0];
     
@@ -281,7 +302,7 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
                 
-                {/* PASO 1: SELECCIÓN DE TIPO */}
+                {/* PASO 1: SELECCIÓN DE TIPO (CONDICIONAL SEGÚN CONFIGURACIÓN) */}
                 {step === 1 && (
                     <View>
                         <View style={styles.stepBadgeContainer}><Text style={styles.stepBadgeNumber}>PASO 1 DE 4</Text></View>
@@ -289,21 +310,25 @@ export default function CompanyReservationModal({ empresa, userName, onClose }: 
                         <Text style={styles.stepSubtitle}>Selecciona el tipo de espacio para tu visita.</Text>
 
                         <View style={styles.optionsRow}>
-                            <TouchableOpacity 
-                                style={[styles.optionCard, styles.optionCardActive]}
-                                onPress={() => setStep(2)}
-                            >
-                                <Ionicons name="restaurant" size={28} color="#01c38e" />
-                                <Text style={[styles.optionText, styles.optionTextActive]}>Mesa</Text>
-                            </TouchableOpacity>
+                            {showMesaOption && (
+                                <TouchableOpacity 
+                                    style={[styles.optionCard, styles.optionCardActive]}
+                                    onPress={() => setStep(2)}
+                                >
+                                    <Ionicons name="restaurant" size={28} color="#01c38e" />
+                                    <Text style={[styles.optionText, styles.optionTextActive]}>Mesa</Text>
+                                </TouchableOpacity>
+                            )}
 
-                            <TouchableOpacity 
-                                style={styles.optionCard}
-                                onPress={() => setShowCourtStep(true)}
-                            >
-                                <Ionicons name="football" size={28} color="#9ca3af" />
-                                <Text style={styles.optionText}>Cancha</Text>
-                            </TouchableOpacity>
+                            {showCanchaOption && (
+                                <TouchableOpacity 
+                                    style={styles.optionCard}
+                                    onPress={() => setShowCourtStep(true)}
+                                >
+                                    <Ionicons name="football" size={28} color="#9ca3af" />
+                                    <Text style={styles.optionText}>Cancha</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
                 )}
