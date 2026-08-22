@@ -23,6 +23,7 @@ interface ProductCardProps {
     precio: number;
     descripcion?: string;
     imagenUrl?: string | null;
+    categoriaNombre?: string; // 👈 NUEVO: Nombre de la categoría a mostrar
     onDeleteSuccess?: (id: number) => void;
     onEdit?: () => void;
     cantidad?: number;
@@ -37,6 +38,7 @@ export default function ProductCard({
     precio, 
     descripcion, 
     imagenUrl, 
+    categoriaNombre,
     onDeleteSuccess,
     onEdit,
     cantidad = 0,
@@ -100,6 +102,13 @@ export default function ProductCard({
                 </View>
 
                 <View style={styles.infoCol}>
+                    {/* 👇 NUEVO: Insignia de categoría */}
+                    {categoriaNombre && (
+                        <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryText}>{categoriaNombre}</Text>
+                        </View>
+                    )}
+
                     <Text style={styles.nombre} numberOfLines={2}>{nombre}</Text>
                     {!isExpanded && descripcion && (
                         <Text style={styles.shortDesc} numberOfLines={1}>{descripcion}</Text>
@@ -204,6 +213,21 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: 14,
         justifyContent: 'center',
+    },
+    // Estilos para la insignia de categoría
+    categoryBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: 'rgba(1, 195, 142, 0.15)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginBottom: 4,
+    },
+    categoryText: {
+        color: COLORS.accent,
+        fontFamily: FONTS.textMedium,
+        fontSize: 9,
+        textTransform: 'uppercase',
     },
     nombre: {
         color: COLORS.text,

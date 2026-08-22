@@ -25,9 +25,13 @@ interface CompanyMenuModalProps {
 export default function CompanyMenuModal({ empresa, userName, onClose, onImagePress }: CompanyMenuModalProps) {
     const insets = useSafeAreaInsets();
     const [products, setProducts] = useState<any[]>([]);
+    const [categories, setCategories] = useState<string[]>(['Todos']);
     const [loading, setLoading] = useState(true);
     const [cart, setCart] = useState<Record<number, any>>({});
     
+    // --- ESTADOS DE CATEGORÍAS ---
+    const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+
     // --- ESTADOS DE LOS PASOS ---
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
     const [deliveryNote, setDeliveryNote] = useState('');
@@ -36,24 +40,43 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
     const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
     useEffect(() => {
-        const fetchProducts = async () => {
+        const fetchData = async () => {
             try {
                 const baseUrl = process.env.EXPO_PUBLIC_API_URL;
-                const response = await fetch(`${baseUrl}/api/empresas/${empresa.id}/productos`);
-                if (response.ok) {
-                    const data = await response.json();
-                    setProducts(data);
+                
+                // 1. Cargar productos
+                const prodResponse = await fetch(`${baseUrl}/api/empresas/${empresa.id}/productos`);
+                if (prodResponse.ok) {
+                    const prodData = await prodResponse.json();
+                    setProducts(prodData);
+                }
+
+                // 2. Cargar categorías directamente desde el backend
+                const catResponse = await fetch(`${baseUrl}/api/empresas/${empresa.id}/categorias-disponibles`);
+                if (catResponse.ok) {
+                    const catData = await catResponse.json();
+                    const catNames = catData.map((c: any) => c.nombre || c);
+                    setCategories(['Todos', ...catNames]);
                 }
             } catch (error) {
-                console.error("Error fetching products:", error);
+                console.error("Error fetching menu data:", error);
             } finally {
                 setLoading(false);
             }
         };
+
         if (empresa?.id) {
-            fetchProducts();
+            fetchData();
         }
     }, [empresa]);
+
+    // Filtrar productos según la categoría seleccionada de forma segura
+    const filteredProducts = selectedCategory === 'Todos'
+        ? products
+        : products.filter(p => {
+            const catName = p.categoria_rel?.nombre || p.categoria || p.categoria_nombre || 'General';
+            return catName === selectedCategory;
+        });
 
     const handleCartUpdate = (productId: number, product: any, delta: number) => {
         setCart(prev => {
@@ -75,30 +98,20 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
     const descuentoTotal = subtotal * (descPercent / 100);
     const totalPagado = subtotal - descuentoTotal;
 
-    // --- FUNCIÓN PARA OBTENER Y COMPARTIR UBICACIÓN ---
     const handleShareLocation = async () => {
         setIsFetchingLocation(true);
         try {
-            // Solicita permisos al usuario (si ya los tiene, simplemente avanza)
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert(
-                    "Permiso denegado", 
-                    "Necesitamos acceso a tu ubicación para pegarla automáticamente. Puedes ingresarla manualmente si lo prefieres."
-                );
+                Alert.alert("Permiso denegado", "Necesitamos acceso a tu ubicación.");
                 setIsFetchingLocation(false);
                 return;
             }
 
-            // Obtiene la ubicación actual con alta precisión
-            const location = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Highest
-            });
-
+            const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
             const { latitude, longitude } = location.coords;
             const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
 
-            // Opcional: Intenta obtener el nombre de la calle (Geocodificación inversa)
             let addressText = '';
             try {
                 const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
@@ -108,19 +121,14 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                     if (addressText.startsWith(',')) addressText = addressText.substring(1).trim();
                 }
             } catch (e) {
-                console.log("No se pudo obtener el nombre de la calle", e);
+                console.log("No se pudo obtener la calle", e);
             }
 
-            // Pega la ubicación en el estado del Input
-            const finalAddressText = addressText 
-                ? `${addressText}\nGPS: ${mapsLink}` 
-                : `Ubicación GPS: ${mapsLink}`;
-            
+            const finalAddressText = addressText ? `${addressText}\nGPS: ${mapsLink}` : `Ubicación GPS: ${mapsLink}`;
             setDeliveryAddress(finalAddressText);
-
         } catch (error) {
             console.error("Error obteniendo ubicación:", error);
-            Alert.alert("Error", "Ocurrió un problema al obtener tu ubicación. Por favor, revisa que tu GPS esté encendido.");
+            Alert.alert("Error", "Ocurrió un problema al obtener tu ubicación.");
         } finally {
             setIsFetchingLocation(false);
         }
@@ -138,18 +146,14 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
 
         const orderId = Math.floor(10000 + Math.random() * 90000);
         let mensaje = `*NUEVA ORDEN DESDE QRONNOS*\n`;
-        mensaje += `👤 *Cliente:* ${userName}\n`;
-        mensaje += `(ID: #${orderId})\n\n`;
-
+        mensaje += `👤 *Cliente:* ${userName}\n(ID: #${orderId})\n\n`;
         mensaje += `📍 *Tipo de orden:* ${orderType === 'Domicilio' ? '🛵 Domicilio' : '🍽️ Consumir en el establecimiento'}\n`;
         if (orderType === 'Domicilio' && deliveryAddress.trim() !== '') {
             mensaje += `🏠 *Dirección:*\n${deliveryAddress.trim()}\n\n`;
         }
-
         if (deliveryNote.trim() !== '') {
             mensaje += `📝 *Nota / Instrucciones:*\n${deliveryNote.trim()}\n\n`;
         }
-
         mensaje += `*PEDIDO:*\n`;
         cartArray.forEach(item => {
             mensaje += `• (${item.cantidad}) ${item.nombre} - $${(item.precio * item.cantidad).toLocaleString()}\n`;
@@ -204,7 +208,6 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
             {/* CONTENIDO SEGÚN EL PASO */}
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 180, paddingTop: 10 }}>
                 
-                {/* WIDGET DE AHORRO Y TOTAL FLOTANTE SUPERIOR EN CADA PASO */}
                 {totalItemsCount > 0 && (
                     <View style={styles.savingsBanner}>
                         <View style={{ flex: 1 }}>
@@ -220,7 +223,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                     </View>
                 )}
 
-                {/* PASO 1: SELECCIÓN DE PRODUCTOS */}
+                {/* PASO 1: SELECCIÓN DE PRODUCTOS Y CATEGORÍAS */}
                 {step === 1 && (
                     <>
                         {loading ? (
@@ -231,25 +234,56 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                             </Text>
                         ) : (
                             <View>
-                                {products.map((item) => (
-                                    <ProductCard 
-                                        key={item.producto_id}
-                                        nombre={item.nombre}
-                                        precio={item.precio}
-                                        descripcion={item.descripcion}
-                                        imagenUrl={item.imagenUrl}
-                                        cantidad={cart[item.producto_id]?.cantidad || 0}
-                                        onAdd={() => handleCartUpdate(item.producto_id, item, 1)}
-                                        onRemove={() => handleCartUpdate(item.producto_id, item, -1)}
-                                        onImagePress={() => item.imagenUrl ? onImagePress(item.imagenUrl) : null}
-                                    />
-                                ))}
+                                {/* BARRA HORIZONTAL DE CATEGORÍAS */}
+                                <ScrollView 
+                                    horizontal 
+                                    showsHorizontalScrollIndicator={false} 
+                                    style={styles.categoriesScroll}
+                                    contentContainerStyle={styles.categoriesContainer}
+                                >
+                                    {categories.map((cat, index) => {
+                                        const isSelected = selectedCategory === cat;
+                                        return (
+                                            <TouchableOpacity
+                                                key={index}
+                                                style={[styles.categoryChip, isSelected && styles.categoryChipActive]}
+                                                onPress={() => setSelectedCategory(cat)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextActive]}>
+                                                    {cat}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+
+                                {/* LISTA DE PRODUCTOS FILTRADOS */}
+                                {filteredProducts.length === 0 ? (
+                                    <Text style={{ color: '#9ca3af', textAlign: 'center', marginTop: 30, fontFamily: 'Poppins-Regular' }}>
+                                        No hay productos en esta categoría.
+                                    </Text>
+                                ) : (
+                                    filteredProducts.map((item) => (
+                                        <ProductCard 
+                                            key={item.producto_id}
+                                            nombre={item.nombre}
+                                            precio={item.precio}
+                                            descripcion={item.descripcion}
+                                            imagenUrl={item.imagenUrl}
+                                            cantidad={cart[item.producto_id]?.cantidad || 0}
+                                            onAdd={() => handleCartUpdate(item.producto_id, item, 1)}
+                                            onRemove={() => handleCartUpdate(item.producto_id, item, -1)}
+                                            onImagePress={() => item.imagenUrl ? onImagePress(item.imagenUrl) : null}
+                                        />
+                                    ))
+                                )}
                             </View>
                         )}
                     </>
                 )}
 
-                {/* PASO 2: AGREGAR NOTA O INSTRUCCIONES */}
+                {/* PASO 2: NOTAS */}
                 {step === 2 && (
                     <View style={styles.stepContainer}>
                         <View style={styles.stepBadgeContainer}>
@@ -280,7 +314,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                     </View>
                 )}
 
-                {/* PASO 3: SELECCIONAR TIPO DE ORDEN Y MAPS */}
+                {/* PASO 3: TIPO DE ORDEN */}
                 {step === 3 && (
                     <View style={styles.stepContainer}>
                         <View style={styles.stepBadgeContainer}>
@@ -345,7 +379,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                     </View>
                 )}
 
-                {/* PASO 4: RESUMEN Y ENVÍO */}
+                {/* PASO 4: CONFIRMACIÓN */}
                 {step === 4 && (
                     <View style={styles.stepContainer}>
                         <View style={styles.stepBadgeContainer}>
@@ -406,7 +440,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
 
             </ScrollView>
 
-            {/* BARRA INFERIOR DE NAVEGACIÓN ENTRE PASOS */}
+            {/* BARRA INFERIOR */}
             {totalItemsCount > 0 && (
                 <View style={styles.stickyBottomBar}>
                     {step === 1 && (
@@ -415,11 +449,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                                 <Text style={styles.subtotalText}>{totalItemsCount} {totalItemsCount === 1 ? 'producto' : 'productos'}</Text>
                                 <Text style={styles.totalText}>${totalPagado.toLocaleString()}</Text>
                             </View>
-                            <TouchableOpacity 
-                                style={styles.nextStepBtn} 
-                                onPress={() => setStep(2)}
-                                activeOpacity={0.9}
-                            >
+                            <TouchableOpacity style={styles.nextStepBtn} onPress={() => setStep(2)} activeOpacity={0.9}>
                                 <Text style={styles.nextStepBtnText}>CONTINUAR</Text>
                                 <Ionicons name="arrow-forward" size={18} color="#000" style={{ marginLeft: 6 }} />
                             </TouchableOpacity>
@@ -432,11 +462,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                                 <Ionicons name="arrow-back" size={18} color="#FFF" />
                                 <Text style={styles.backStepBtnText}>Volver</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.nextStepBtn} 
-                                onPress={() => setStep(3)}
-                                activeOpacity={0.9}
-                            >
+                            <TouchableOpacity style={styles.nextStepBtn} onPress={() => setStep(3)} activeOpacity={0.9}>
                                 <Text style={styles.nextStepBtnText}>SIGUIENTE</Text>
                                 <Ionicons name="arrow-forward" size={18} color="#000" style={{ marginLeft: 6 }} />
                             </TouchableOpacity>
@@ -472,11 +498,7 @@ export default function CompanyMenuModal({ empresa, userName, onClose, onImagePr
                                 <Ionicons name="arrow-back" size={18} color="#FFF" />
                                 <Text style={styles.backStepBtnText}>Modificar</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.whatsappOrderBtn} 
-                                onPress={sendOrderWhatsApp}
-                                activeOpacity={0.9}
-                            >
+                            <TouchableOpacity style={styles.whatsappOrderBtn} onPress={sendOrderWhatsApp} activeOpacity={0.9}>
                                 <Ionicons name="logo-whatsapp" size={22} color="#FFF" />
                                 <Text style={styles.whatsappOrderBtnText}>ENVIAR A WHATSAPP</Text>
                             </TouchableOpacity>
@@ -497,6 +519,14 @@ const styles = StyleSheet.create({
     
     stepIndicatorBadge: { backgroundColor: 'rgba(1, 195, 142, 0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(1, 195, 142, 0.3)' },
     stepIndicatorText: { color: '#01c38e', fontFamily: 'Poppins-Bold', fontSize: 11 },
+
+    // Estilos de Categorías
+    categoriesScroll: { marginBottom: 15, marginHorizontal: -20 },
+    categoriesContainer: { paddingHorizontal: 20, gap: 8, alignItems: 'center' },
+    categoryChip: { backgroundColor: '#13151a', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#1f2229' },
+    categoryChipActive: { backgroundColor: 'rgba(1, 195, 142, 0.15)', borderColor: '#01c38e' },
+    categoryChipText: { color: '#9ca3af', fontFamily: 'Poppins-Medium', fontSize: 12 },
+    categoryChipTextActive: { color: '#01c38e', fontFamily: 'Poppins-Bold', fontSize: 12 },
 
     savingsBanner: { backgroundColor: '#13151a', borderRadius: 14, padding: 12, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#1f2229' },
     savingsBannerSub: { color: '#9ca3af', fontFamily: 'Poppins-Regular', fontSize: 11 },

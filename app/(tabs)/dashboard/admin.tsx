@@ -22,6 +22,7 @@ import {
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import CategoryManagerModal from '../../../components/modals/CategoryManagerModal';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -91,8 +92,9 @@ export default function AdminDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [jwtState, setJwt] = useState<string | null>(null);
 
-  // --- ESTADOS PARA REGISTRO ---
+  // --- ESTADOS PARA REGISTRO Y CATEGORIAS ---
   const [modalRegistroVisible, setModalRegistroVisible] = useState(false);
+  const [modalCategoriasVisible, setModalCategoriasVisible] = useState(false);
   const [isRegistrando, setIsRegistrando] = useState(false);
   const [formData, setFormData] = useState({
     nombre: '',
@@ -366,6 +368,22 @@ export default function AdminDashboardScreen() {
           </View>
         </View>
 
+        {/* 👇 BOTÓN PARA GESTIONAR CATEGORÍAS 👇 */}
+        <TouchableOpacity 
+          style={styles.manageCategoriesBtn}
+          onPress={() => setModalCategoriasVisible(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.manageCategoriesIcon}>
+            <Ionicons name="pricetags" size={normalize(20)} color="#000" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.manageCategoriesTitle}>GESTIONAR CATEGORÍAS</Text>
+            <Text style={styles.manageCategoriesSub}>Crea o elimina categorías para productos</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={normalize(20)} color={COLORS.accent} />
+        </TouchableOpacity>
+
         {/* LISTADO DE EMPRESAS */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>SOCIOS COMERCIALES</Text>
@@ -502,6 +520,13 @@ export default function AdminDashboardScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* 👇 NUEVO MODAL DE CATEGORÍAS 👇 */}
+      <CategoryManagerModal 
+        visible={modalCategoriasVisible} 
+        onClose={() => setModalCategoriasVisible(false)} 
+        jwt={jwtState}
+      />
     </View>
   );
 }
@@ -557,6 +582,35 @@ const getResponsiveStyles = (width: number, topInset: number) => {
     iconContainer: { width: normalize(42), height: normalize(42), borderRadius: normalize(12), justifyContent: 'center', alignItems: 'center', marginRight: normalize(12), borderWidth: 1 },
     kpiValue: { fontSize: normalize(20), fontFamily: FONTS.title },
     kpiTitle: { fontSize: normalize(9), color: COLORS.textSec, fontFamily: FONTS.textBold, letterSpacing: 1, marginTop: 2 },
+
+    // --- BOTÓN GESTIONAR CATEGORÍAS ---
+    manageCategoriesBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(1, 195, 142, 0.1)',
+      padding: normalize(16),
+      borderRadius: normalize(20),
+      borderWidth: 1,
+      borderColor: 'rgba(1, 195, 142, 0.3)',
+      marginBottom: normalize(25),
+    },
+    manageCategoriesIcon: {
+      backgroundColor: COLORS.accent,
+      padding: normalize(10),
+      borderRadius: normalize(12),
+      marginRight: normalize(15),
+    },
+    manageCategoriesTitle: {
+      color: COLORS.accent,
+      fontFamily: FONTS.title,
+      fontSize: normalize(12),
+    },
+    manageCategoriesSub: {
+      color: COLORS.textSec,
+      fontFamily: FONTS.textRegular,
+      fontSize: normalize(10),
+      marginTop: 2,
+    },
 
     // --- EMPRESA CARDS ---
     empresaCard: {

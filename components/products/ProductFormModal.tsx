@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -32,6 +32,11 @@ const FONTS = {
     textBold: 'Poppins-Bold'
 };
 
+interface CategoriaProducto {
+    categoria_prod_id: number;
+    nombre: string;
+}
+
 interface ProductFormModalProps {
     visible: boolean;
     onClose: () => void;
@@ -43,25 +48,47 @@ interface ProductFormModalProps {
         precio: number;
         descripcion: string;
         imagenUrl: string;
+        categoria_prod_id?: number | null;
     } | null;
 }
 
 export default function ProductFormModal({ visible, onClose, onSuccess, empresaId, productToEdit }: ProductFormModalProps) {
-    const [nombre, setNombre] = useState(productToEdit?.nombre || '');
-    const [precio, setPrecio] = useState(productToEdit?.precio?.toString() || '');
-    const [descripcion, setDescripcion] = useState(productToEdit?.descripcion || '');
-    const [imagen, setImagen] = useState<string | null>(productToEdit?.imagenUrl || null);
+    const [nombre, setNombre] = useState('');
+    const [precio, setPrecio] = useState('');
+    const [descripcion, setDescripcion] = useState('');
+    const [imagen, setImagen] = useState<string | null>(null);
     const [imagenAsset, setImagenAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+    
+    // --- ESTADOS PARA CATEGORÍAS ---
+    const [categorias, setCategorias] = useState<CategoriaProducto[]>([]);
+    const [selectedCategoriaId, setSelectedCategoriaId] = useState<number | null>(null);
+    const [dropdownVisible, setDropdownVisible] = useState(false);
+
     const [isSaving, setIsSaving] = useState(false);
 
-    // Efecto para resetear el formulario cuando se abre para editar o crear
-    React.useEffect(() => {
+    const fetchCategorias = async () => {
+        try {
+            const API_URL = process.env.EXPO_PUBLIC_API_URL;
+            const response = await fetch(`${API_URL}/api/categorias-productos`);
+            if (response.ok) {
+                const data = await response.json();
+                setCategorias(Array.isArray(data) ? data : (data.categorias || []));
+            }
+        } catch (error) {
+            console.error("Error al cargar categorías:", error);
+        }
+    };
+
+    // Efecto para resetear el formulario y cargar categorías cuando se abre
+    useEffect(() => {
         if (visible) {
+            fetchCategorias();
             if (productToEdit) {
                 setNombre(productToEdit.nombre);
                 setPrecio(productToEdit.precio.toString());
-                setDescripcion(productToEdit.descripcion);
+                setDescripcion(productToEdit.descripcion || '');
                 setImagen(productToEdit.imagenUrl);
+                setSelectedCategoriaId(productToEdit.categoria_prod_id || null);
                 setImagenAsset(null);
             } else {
                 resetForm();
@@ -104,9 +131,12 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
             data.append('precio', precio);
             data.append('empresa_id', empresaId);
             data.append('descripcion', descripcion);
+            
+            if (selectedCategoriaId) {
+                data.append('categoria_prod_id', selectedCategoriaId.toString());
+            }
 
             if (imagenAsset) {
-                // Solo adjuntar imagen si se seleccionó una nueva
                 const fileToUpload = {
                     uri: imagenAsset.uri,
                     name: imagenAsset.fileName || `prod_${Date.now()}.jpg`,
@@ -151,7 +181,11 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
         setDescripcion('');
         setImagen(null);
         setImagenAsset(null);
+        setSelectedCategoriaId(null);
+        setDropdownVisible(false);
     };
+
+    const categoriaSeleccionadaNombre = categorias.find(c => c.categoria_prod_id === selectedCategoriaId)?.nombre || 'Seleccionar categoría';
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -200,7 +234,52 @@ export default function ProductFormModal({ visible, onClose, onSuccess, empresaI
                                     onChangeText={setPrecio}
                                 />
 
-                                <Text style={styles.label}>Descripción (Opcional)</Text>
+                                {/* --- MENÚ DESPLEGABLE DE CATEGORÍAS --- */}
+                                <Text style={styles.label}>Categoría</Text>
+                                <TouchableOpacity 
+                                    style={styles.dropdownSelector}
+                                    onPress={() => setDropdownVisible(!dropdownVisible)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={[styles.dropdownSelectorText, !selectedCategoriaId && { color: COLORS.textSec }]}>
+                                        {categoriaSeleccionadaNombre}
+                                    </Text>
+                                    <Ionicons name={dropdownVisible ? "chevron-up" : "chevron-down"} size={20} color={COLORS.textSec} />
+                                </TouchableOpacity>
+
+                                {dropdownVisible && (
+                                    <View style={styles.dropdownList}>
+                                        {categorias.length === 0 ? (
+                                            <Text style={styles.emptyCategoryText}>No hay categorías registradas</Text>
+                                        ) : (
+                                            categorias.map((cat) => (
+                                                <TouchableOpacity
+                                                    key={cat.categoria_prod_id}
+                                                    style={[
+                                                        styles.dropdownItem,
+                                                        selectedCategoriaId === cat.categoria_prod_id && styles.dropdownItemActive
+                                                    ]}
+                                                    onPress={() => {
+                                                        setSelectedCategoriaId(cat.categoria_prod_id);
+                                                        setDropdownVisible(false);
+                                                    }}
+                                                >
+                                                    <Text style={[
+                                                        styles.dropdownItemText,
+                                                        selectedCategoriaId === cat.categoria_prod_id && styles.dropdownItemTextActive
+                                                    ]}>
+                                                        {cat.nombre}
+                                                    </Text>
+                                                    {selectedCategoriaId === cat.categoria_prod_id && (
+                                                        <Ionicons name="checkmark" size={16} color={COLORS.accent} />
+                                                    )}
+                                                </TouchableOpacity>
+                                            ))
+                                        )}
+                                    </View>
+                                )}
+
+                                <Text style={[styles.label, { marginTop: 20 }]}>Descripción (Opcional)</Text>
                                 <TextInput
                                     style={[styles.input, styles.textArea]}
                                     placeholder="Ej: Café de grano premium..."
@@ -307,13 +386,67 @@ const styles = StyleSheet.create({
         padding: 16,
         color: COLORS.text,
         fontFamily: FONTS.textRegular,
-        marginBottom: 20,
+        marginBottom: 10,
         borderWidth: 1,
         borderColor: COLORS.border,
     },
     textArea: {
         height: 100,
         textAlignVertical: 'top',
+    },
+    // Estilos del menú desplegable de categorías
+    dropdownSelector: {
+        backgroundColor: COLORS.cardBg,
+        borderRadius: 15,
+        padding: 16,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        marginBottom: 5,
+    },
+    dropdownSelectorText: {
+        color: COLORS.text,
+        fontFamily: FONTS.textRegular,
+        fontSize: 14,
+    },
+    dropdownList: {
+        backgroundColor: COLORS.cardBg,
+        borderRadius: 15,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        marginTop: 5,
+        marginBottom: 15,
+        overflow: 'hidden',
+        maxHeight: 180,
+    },
+    dropdownItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+    },
+    dropdownItemActive: {
+        backgroundColor: 'rgba(1, 195, 142, 0.15)',
+    },
+    dropdownItemText: {
+        color: COLORS.textSec,
+        fontFamily: FONTS.textRegular,
+        fontSize: 14,
+    },
+    dropdownItemTextActive: {
+        color: COLORS.accent,
+        fontFamily: FONTS.textBold,
+    },
+    emptyCategoryText: {
+        color: COLORS.textSec,
+        fontFamily: FONTS.textRegular,
+        fontSize: 13,
+        textAlign: 'center',
+        padding: 15,
     },
     saveBtn: {
         backgroundColor: COLORS.accent,
