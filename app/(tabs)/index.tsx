@@ -1,5 +1,6 @@
-import { Ionicons } from '@expo/vector-icons'; // Importado para el icono del ojito
+import { AntDesign, Ionicons } from '@expo/vector-icons'; // Importado para el icono del ojito
 import { CommonActions } from '@react-navigation/native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Camera } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,6 +9,7 @@ import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { reload, signInWithEmailAndPassword } from 'firebase/auth';
 import { useEffect, useRef, useState } from 'react';
+import { useAppleAuth } from '../../hooks/useAppleAuth';
 import {
     ActivityIndicator,
     Alert,
@@ -27,6 +29,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from '../../src/firebaseConfig';
+import '../../src/googleSignin';
 
 // --- PALETA QRONNOS ---
 const COLORS = {
@@ -48,6 +51,8 @@ const FONTS = {
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const LOGIN_CLIENTE_URL = `${API_URL}/api/cliente/login`;
+const LOGIN_GOOGLE_URL = `${API_URL}/api/cliente/login-google`;
+const LOGIN_APPLE_URL = `${API_URL}/api/cliente/login-apple`;
 
 export default function HomeScreen() {
     const navigation = useNavigation();
@@ -59,6 +64,10 @@ export default function HomeScreen() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false); // Estado para mostrar/ocultar contraseña
     const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+    const [isAppleLoading, setIsAppleLoading] = useState(false);
+
+    const { isAvailable: isAppleAvailable, signIn: appleSignIn } = useAppleAuth();
 
     // --- ESTADOS DE ANIMACIÓN ---
     const [splashVisible, setSplashVisible] = useState(true);
@@ -256,6 +265,185 @@ export default function HomeScreen() {
         }
     }
 
+    async function handleGoogleLogin() {
+        setIsGoogleLoading(true);
+        try {
+            let expoToken = null;
+            try {
+                const projectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
+                if (projectId) {
+                    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+                    expoToken = tokenData.data;
+                }
+            } catch (e) {
+                console.log("Error push token:", e);
+            }
+
+            await GoogleSignin.hasPlayServices();
+
+            try {
+                await GoogleSignin.signOut();
+            } catch (e) {
+                console.log("Sin sesión previa de Google:", e);
+            }
+
+            const userInfo = await GoogleSignin.signIn();
+
+            if (userInfo.type === 'cancelled') {
+                console.log("Inicio de sesión con Google cancelado.");
+                return;
+            }
+
+            const idToken = userInfo.data.idToken;
+
+            if (!idToken) {
+                Alert.alert("Error", "No fue posible obtener el token de Google.");
+                return;
+            }
+
+            console.log(expoToken)
+            const response = await fetch(LOGIN_GOOGLE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    idToken: idToken,
+                    pushToken: expoToken
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.code === 200) {
+                const { token, token_empresa, jwt, rol, cliente, empresa } = data;
+
+                if (jwt) await SecureStore.setItemAsync('jwt', String(jwt));
+                if (rol) await SecureStore.setItemAsync('rol', String(rol));
+
+                if (token) {
+                    await SecureStore.setItemAsync('user_id', String(token));
+                    if (cliente) await SecureStore.setItemAsync('nameCliente', String(cliente));
+                }
+
+                if (token_empresa) {
+                    await SecureStore.setItemAsync('empresa_id', String(token_empresa));
+                    if (empresa) await SecureStore.setItemAsync('nameEmpresa', String(empresa));
+                }
+
+                navigation.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'dashboard' }],
+                    })
+                );
+            } else {
+                Alert.alert("Error", data.message || "No se pudo iniciar sesión con Google.");
+            }
+
+        } catch (error: any) {
+            if (error?.message && String(error.message).toLowerCase().includes('cancel')) {
+                console.log("Inicio de sesión con Google cancelado:", error?.message);
+            } else {
+                Alert.alert(
+                    "Error de Acceso",
+                    "No se pudo iniciar sesión con Google. Intenta de nuevo."
+                );
+            }
+        } finally {
+            setIsGoogleLoading(false);
+        }
+    }
+
+    async function handleAppleLogin() {
+        if (!isAppleAvailable) {
+            Alert.alert("No disponible", "Iniciar sesión con Apple solo está disponible en dispositivos iOS.");
+            return;
+        }
+
+        setIsAppleLoading(true);
+        try {
+            let expoToken = null;
+            try {
+                const projectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
+                if (projectId) {
+                    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+                    expoToken = tokenData.data;
+                }
+            } catch (e) {
+                console.log("Error push token:", e);
+            }
+
+            const result = await appleSignIn();
+
+            if (!result) {
+                console.log("Inicio de sesión con Apple cancelado o sin token.");
+                return;
+            }
+
+            if (!result.identityToken) {
+                Alert.alert("Error", "No fue posible obtener el token de Apple.");
+                return;
+            }
+
+            if (!result.authorizationCode) {
+                Alert.alert("Error", "No fue posible obtener el código de autorización de Apple.");
+                return;
+            }
+
+            console.log(expoToken)
+            const response = await fetch(LOGIN_APPLE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    identityToken: result.identityToken,
+                    authorizationCode: result.authorizationCode,
+                    nonce: result.nonce,
+                    name: result.fullName || undefined,
+                    pushToken: expoToken
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.code === 200) {
+                const { token, token_empresa, jwt, rol, cliente, empresa } = data;
+
+                if (jwt) await SecureStore.setItemAsync('jwt', String(jwt));
+                if (rol) await SecureStore.setItemAsync('rol', String(rol));
+
+                if (token) {
+                    await SecureStore.setItemAsync('user_id', String(token));
+                    if (cliente) await SecureStore.setItemAsync('nameCliente', String(cliente));
+                }
+
+                if (token_empresa) {
+                    await SecureStore.setItemAsync('empresa_id', String(token_empresa));
+                    if (empresa) await SecureStore.setItemAsync('nameEmpresa', String(empresa));
+                }
+
+                navigation.dispatch(
+                    CommonActions.reset({
+                        index: 0,
+                        routes: [{ name: 'dashboard' }],
+                    })
+                );
+            } else {
+                Alert.alert("Error", data.message || "No se pudo iniciar sesión con Apple.");
+            }
+
+        } catch (error: any) {
+            if (error?.message && String(error.message).toLowerCase().includes('cancel')) {
+                console.log("Inicio de sesión con Apple cancelado:", error?.message);
+            } else {
+                Alert.alert(
+                    "Error de Acceso",
+                    "No se pudo iniciar sesión con Apple. Intenta de nuevo."
+                );
+            }
+        } finally {
+            setIsAppleLoading(false);
+        }
+    }
+
     if (!fontsLoaded) {
         return (
             <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center' }}>
@@ -347,13 +535,49 @@ export default function HomeScreen() {
 
                                 <TouchableOpacity
                                     onPress={handleLogin}
-                                    style={[styles.button, isLoggingIn && { opacity: 0.7 }]}
-                                    disabled={isLoggingIn}
+                                    style={[styles.button, (isLoggingIn || isGoogleLoading || isAppleLoading) && { opacity: 0.7 }]}
+                                    disabled={isLoggingIn || isGoogleLoading || isAppleLoading}
                                 >
                                     {isLoggingIn ? (
                                         <ActivityIndicator color="#000" />
                                     ) : (
                                         <Text style={styles.textButton}>INGRESAR</Text>
+                                    )}
+                                </TouchableOpacity>
+
+                                <View style={styles.dividerRow}>
+                                    <View style={styles.dividerLine} />
+                                    <Text style={styles.dividerText}>o</Text>
+                                    <View style={styles.dividerLine} />
+                                </View>
+
+                                <TouchableOpacity
+                                    onPress={handleGoogleLogin}
+                                    style={[styles.googleButton, (isLoggingIn || isGoogleLoading || isAppleLoading) && { opacity: 0.7 }]}
+                                    disabled={isLoggingIn || isGoogleLoading || isAppleLoading}
+                                >
+                                    {isGoogleLoading ? (
+                                        <ActivityIndicator color="#000" />
+                                    ) : (
+                                        <>
+                                            <Text style={styles.googleIcon}>G</Text>
+                                            <Text style={styles.googleButtonText}>Continuar con Google</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={handleAppleLogin}
+                                    style={[styles.appleButton, (isLoggingIn || isGoogleLoading || isAppleLoading || !isAppleAvailable) && { opacity: isAppleAvailable ? 0.7 : 0.35 }]}
+                                    disabled={isLoggingIn || isGoogleLoading || isAppleLoading || !isAppleAvailable}
+                                >
+                                    {isAppleLoading ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <>
+                                            <AntDesign name="apple" size={22} color="#fff" />
+                                            <Text style={styles.appleButtonText}>Continuar con Apple</Text>
+                                        </>
                                     )}
                                 </TouchableOpacity>
 
@@ -487,6 +711,71 @@ const styles = StyleSheet.create({
         color: "#000",
         fontSize: 15,
         fontFamily: FONTS.title,
+    },
+    dividerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 20,
+        marginBottom: 10,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: COLORS.border,
+    },
+    dividerText: {
+        color: COLORS.textSec,
+        fontFamily: FONTS.textRegular,
+        fontSize: 13,
+        marginHorizontal: 12,
+    },
+    googleButton: {
+        backgroundColor: '#ffffff',
+        width: "100%",
+        height: 60,
+        borderRadius: 18,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.1)',
+    },
+    googleButtonText: {
+        color: "#000",
+        fontSize: 15,
+        fontFamily: FONTS.textMedium,
+        marginLeft: 10,
+    },
+    googleIcon: {
+        color: "#4285F4",
+        fontSize: 18,
+        fontFamily: FONTS.textBold,
+        width: 24,
+        height: 24,
+        textAlign: 'center',
+        lineHeight: 24,
+        borderWidth: 1,
+        borderColor: "#4285F4",
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    appleButton: {
+        backgroundColor: '#000000',
+        width: "100%",
+        height: 60,
+        marginTop: 12,
+        borderRadius: 18,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    appleButtonText: {
+        color: "#fff",
+        fontSize: 15,
+        fontFamily: FONTS.textMedium,
+        marginLeft: 10,
     },
     footerContainer: {
         position: 'absolute',
