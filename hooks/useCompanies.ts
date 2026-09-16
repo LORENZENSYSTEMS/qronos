@@ -12,7 +12,9 @@ export interface Lugar {
     ciudad: string;
     descuentos?: string | null;
     mapLink?: string | null;
-    whatsapp?: string | null; // ✅ 1. Añadido a la interfaz
+    whatsapp?: string | null;
+    instagram?: string | null; // 👈 NUEVO CAMPO
+    sitioWeb?: string | null;  // 👈 NUEVO CAMPO
     img1?: string | null;
     img2?: string | null;
     img3?: string | null;
@@ -20,6 +22,11 @@ export interface Lugar {
     lng?: number | null;
     horarioApertura?: string;
     horarioCierre?: string;
+    // --- CAMPOS DE RESERVAS AÑADIDOS ---
+    mostrar_reservas?: boolean | string | number;
+    mostrarReservas?: boolean | string | number;
+    tipo_reservas?: string;
+    tipoReservas?: string;
 }
 
 const parseCoord = (value: any): number | null => {
@@ -58,7 +65,9 @@ const fetchCompanies = async (): Promise<Lugar[]> => {
         ciudad: item.ciudad,
         descuentos: item.descuento,
         mapLink: item.ubicacionMaps,
-        whatsapp: item.whatsapp, // ✅ 2. AHORA SÍ PASAMOS EL WHATSAPP AL DASHBOARD
+        whatsapp: item.whatsapp,
+        instagram: item.instagram, // 👈 NUEVO MAPEADO
+        sitioWeb: item.sitioWeb,   // 👈 NUEVO MAPEADO
         img1: item.fotoDescripcion1,
         img2: item.fotoDescripcion2,
         img3: item.fotoDescripcion3,
@@ -66,11 +75,15 @@ const fetchCompanies = async (): Promise<Lugar[]> => {
         lng: parseCoord(item.lng ?? item.longitud ?? item.lon ?? item.longitude),
         horarioApertura: item.horarioApertura,
         horarioCierre: item.horarioCierre,
+        // --- MAPEO DE CAMPOS DE RESERVAS DESDE EL BACKEND ---
+        mostrar_reservas: item.mostrar_reservas ?? item.mostrarReservas,
+        mostrarReservas: item.mostrar_reservas ?? item.mostrarReservas,
+        tipo_reservas: item.tipo_reservas ?? item.tipoReservas,
+        tipoReservas: item.tipo_reservas ?? item.tipoReservas,
     }));
 };
 
 export function useCompanies() {
-    // Bajamos el staleTime a 5 minutos para que los cambios se vean rápido durante el desarrollo
     const REFRESH_TIME = 1000 * 60 * 5; 
 
     return useQuery({

@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import { useNavigation, useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // --- IMPORTACIÓN DEL COMPONENTE EXTERNO DE MESAS Y RESERVAS ---
@@ -131,6 +131,8 @@ export default function CompanyScreen() {
         descripcion: '',
         ubicacionMaps: '',
         whatsapp: '', 
+        instagram: '', // 👈 NUEVO CAMPO
+        sitioWeb: '',   // 👈 NUEVO CAMPO
         descuento: '',
         pais: '',
         ciudad: '',
@@ -143,6 +145,9 @@ export default function CompanyScreen() {
         fotoDescripcion3: null as string | null,
         horarioApertura: '',
         horarioCierre: '',
+        // --- NUEVOS CAMPOS DE RESERVAS ---
+        mostrarReservas: false,
+        tipoReservas: 'Mesas',
     });
 
     const [fontsLoaded] = useFonts({
@@ -236,6 +241,8 @@ export default function CompanyScreen() {
                     descripcion: data.descripcion || '',
                     ubicacionMaps: data.ubicacionMaps || '',
                     whatsapp: data.whatsapp || '', 
+                    instagram: data.instagram || '', // 👈 MAPEADO AQUÍ
+                    sitioWeb: data.sitioWeb || '',   // 👈 MAPEADO AQUÍ
                     descuento: data.descuento || '',
                     pais: data.pais || '',
                     ciudad: data.ciudad || '',
@@ -248,6 +255,9 @@ export default function CompanyScreen() {
                     fotoDescripcion3: data.fotoDescripcion3 || null,
                     horarioApertura: horaAp,
                     horarioCierre: horaCi,
+                    // --- MAPEANDO CAMPOS DE LA BASE DE DATOS AL ESTADO ---
+                    mostrarReservas: data.mostrar_reservas || false,
+                    tipoReservas: data.tipo_reservas || 'Mesas',
                 });
             }
         } catch (error) {
@@ -277,12 +287,18 @@ export default function CompanyScreen() {
             data.append('descripcion', formData.descripcion);
             data.append('ubicacionMaps', formData.ubicacionMaps);
             data.append('whatsapp', formData.whatsapp); 
+            data.append('instagram', formData.instagram); // 👈 ENVIANDO AL FORM DATA
+            data.append('sitioWeb', formData.sitioWeb);   // 👈 ENVIANDO AL FORM DATA
             data.append('descuento', formData.descuento);
             data.append('pais', formData.pais);
             data.append('ciudad', formData.ciudad);
             data.append('categoria', formData.categoria);
             data.append('horarioApertura', formData.horarioApertura);
             data.append('horarioCierre', formData.horarioCierre);
+            
+            // --- AGREGANDO NUEVOS CAMPOS AL FORM DATA ---
+            data.append('mostrar_reservas', String(formData.mostrarReservas));
+            data.append('tipo_reservas', formData.tipoReservas);
 
             const appendImage = (key: string, uri: string | null) => {
                 if (!uri) return;
@@ -645,6 +661,29 @@ export default function CompanyScreen() {
                             value={formData.whatsapp}
                             onChangeText={(t) => setFormData({ ...formData, whatsapp: t })}
                         />
+
+                        {/* --- NUEVOS CAMPOS: INSTAGRAM Y SITIO WEB --- */}
+                        <Text style={styles.label}>Link de Instagram</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Ej: https://instagram.com/tu_empresa"
+                            placeholderTextColor={COLORS.textSec}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                            value={formData.instagram}
+                            onChangeText={(t) => setFormData({ ...formData, instagram: t })}
+                        />
+
+                        <Text style={styles.label}>Sitio Web</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Ej: https://www.tuempresa.com"
+                            placeholderTextColor={COLORS.textSec}
+                            autoCapitalize="none"
+                            keyboardType="url"
+                            value={formData.sitioWeb}
+                            onChangeText={(t) => setFormData({ ...formData, sitioWeb: t })}
+                        />
                         
                         <Text style={styles.label}>Horario de Atención</Text>
                         <View style={[styles.rowInputs, isSmallScreen && { flexDirection: 'column' }]}>
@@ -674,6 +713,50 @@ export default function CompanyScreen() {
                                 </TouchableOpacity>
                             </View>
                         </View>
+
+                        {/* --- NUEVA SECCIÓN DE CONFIGURACIÓN DE RESERVAS --- */}
+                        <Text style={[styles.label, { marginTop: 5 }]}>Configuración de Reservas</Text>
+                        <View style={[styles.card, { padding: 15, marginBottom: 20, flexDirection: 'column', alignItems: 'stretch' }]}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: formData.mostrarReservas ? 15 : 0 }}>
+                                <View style={{ flex: 1, paddingRight: 10 }}>
+                                    <Text style={{ color: COLORS.text, fontFamily: FONTS.textMedium, fontSize: 14 }}>Habilitar botón de reservas</Text>
+                                    <Text style={{ color: COLORS.textSec, fontFamily: FONTS.textRegular, fontSize: 11, marginTop: 2 }}>Permite a los clientes ver un botón de reservas en tu perfil.</Text>
+                                </View>
+                                <Switch
+                                    trackColor={{ false: COLORS.border, true: 'rgba(1, 195, 142, 0.5)' }}
+                                    thumbColor={formData.mostrarReservas ? COLORS.accent : '#f4f3f4'}
+                                    onValueChange={(val) => setFormData({ ...formData, mostrarReservas: val })}
+                                    value={formData.mostrarReservas}
+                                />
+                            </View>
+
+                            {formData.mostrarReservas && (
+                                <View>
+                                    <View style={[styles.divider, { marginVertical: 10 }]} />
+                                    <Text style={[styles.label, { marginBottom: 10 }]}>¿Qué tipo de reservas aceptas?</Text>
+                                    <View style={[styles.categoryContainer, { marginBottom: 0 }]}>
+                                        {['Mesas', 'Canchas', 'Ambas'].map((tipo) => (
+                                            <TouchableOpacity
+                                                key={tipo}
+                                                style={[
+                                                    styles.categoryChip,
+                                                    formData.tipoReservas === tipo && styles.categoryChipActive,
+                                                ]}
+                                                onPress={() => setFormData({ ...formData, tipoReservas: tipo })}
+                                            >
+                                                <Text style={[
+                                                    styles.categoryChipText,
+                                                    formData.tipoReservas === tipo && styles.categoryChipTextActive,
+                                                ]}>
+                                                    {tipo}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+                        {/* --- FIN DE LA SECCIÓN DE RESERVAS --- */}
 
                         <Text style={styles.label}>Fotos para el Index (Opcional)</Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
