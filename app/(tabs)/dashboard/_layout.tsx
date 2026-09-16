@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { CommonActions } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Tabs, useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -55,12 +54,10 @@ export default function TabLayout() {
                     await SecureStore.deleteItemAsync('empresa_id');
                     await SecureStore.deleteItemAsync('user_id');
                     await SecureStore.deleteItemAsync('rol');
-                    navigation.dispatch(
-                        CommonActions.reset({
-                            index: 0,
-                            routes: [{ name: 'index' }],
-                        })
-                    );
+                    navigation.reset({
+                      index: 0,
+                      routes: [{ name: 'index' as never }],
+                    });
                 }
             }
         ]);

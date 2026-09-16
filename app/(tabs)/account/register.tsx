@@ -1,24 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
-import { CommonActions } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
 import {
     ActivityIndicator,
     Alert,
+    Keyboard,
+    KeyboardAvoidingView,
     Linking,
+    Platform,
+    ScrollView,
     StatusBar,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
-    useWindowDimensions,
-    KeyboardAvoidingView,
-    Platform,
     TouchableWithoutFeedback,
-    Keyboard,
-    ScrollView
+    View,
+    useWindowDimensions
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -111,12 +110,12 @@ export default function Register() {
                     "Registro Exitoso",
                     "¡Cuenta creada! Revisa tu correo para verificar tu cuenta antes de iniciar sesión."
                 );
-                navigation.dispatch(
-                    CommonActions.reset({
-                        index: 0,
-                        routes: [{ name: 'index' }],
-                    })
-                );
+
+                //
+             navigation.reset({
+                index: 0,
+                routes: [{ name: `index` as never }],
+                });
             }
 
         } catch (error: any) {

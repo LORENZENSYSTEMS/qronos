@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { useNavigation, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from "react-native";
@@ -90,7 +90,6 @@ const useEmpresaCheck = () => {
 };
 
 export default function CompanyScreen() {
-    const navigator = useNavigation();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { isAuthorized, isLoadingAuth, errorMessage, empresaId } = useEmpresaCheck();

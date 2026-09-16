@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -94,7 +93,6 @@ interface Lugar {
 }
 
 export default function HomeScreen() {
-  const navigator: any = useNavigation();
   const router = useRouter();
   const safeAreaInsets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();

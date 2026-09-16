@@ -49,6 +49,7 @@
         }
       ],
       "expo-router",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -61,7 +62,8 @@
           }
         }
       ],
-"expo-font",
+      "expo-dev-client",
+      "expo-font",
       [
         "expo-secure-store",
         {
@@ -78,7 +80,9 @@
       "expo-web-browser",
       "expo-apple-authentication",
       "@react-native-community/datetimepicker",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-image",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,

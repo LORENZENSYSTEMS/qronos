@@ -1,11 +1,8 @@
 import { AntDesign, Ionicons } from '@expo/vector-icons'; // Importado para el icono del ojito
-import { CommonActions } from '@react-navigation/native';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Camera } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import * as ImagePicker from 'expo-image-picker';
-import * as Notifications from 'expo-notifications';
-import { useNavigation, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { reload, signInWithEmailAndPassword } from 'firebase/auth';
 import { useEffect, useRef, useState } from 'react';
@@ -29,7 +26,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { auth } from '../../src/firebaseConfig';
+import { getPushToken } from '../../src/services/notifications';
+import {
+  googleSignIn,
+  googleSignOut,
+  hasPlayServices,
+  isGoogleSigninAvailable,
+} from '../../src/services/googleSignin';
 import '../../src/googleSignin';
+import { useAuthNavigation } from '../../hooks/useAuthNavigation';
 
 // --- PALETA QRONNOS ---
 const COLORS = {
@@ -55,9 +60,9 @@ const LOGIN_GOOGLE_URL = `${API_URL}/api/cliente/login-google`;
 const LOGIN_APPLE_URL = `${API_URL}/api/cliente/login-apple`;
 
 export default function HomeScreen() {
-    const navigation = useNavigation();
     const safeareaInsets = useSafeAreaInsets();
     const router = useRouter();
+    const { goToDashboard } = useAuthNavigation();
     const { width, height } = useWindowDimensions();
 
     const [email, setEmail] = useState('');
@@ -174,12 +179,7 @@ export default function HomeScreen() {
                 const empresaId = await SecureStore.getItemAsync('empresa_id');
 
                 if (userId || empresaId) {
-                    navigation.dispatch(
-                        CommonActions.reset({
-                            index: 0,
-                            routes: [{ name: 'dashboard' }],
-                        })
-                    );
+                    goToDashboard();
                 }
             } catch (error) {
                 console.error('Error al acceder a SecureStore:', error);
@@ -197,15 +197,7 @@ export default function HomeScreen() {
         setIsLoggingIn(true);
         try {
             let expoToken = null;
-            try {
-                const projectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
-                if (projectId) {
-                    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-                    expoToken = tokenData.data;
-                }
-            } catch (e) {
-                console.log("Error push token:", e);
-            }
+            expoToken = await getPushToken();
 
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
@@ -247,12 +239,7 @@ export default function HomeScreen() {
                     await SecureStore.setItemAsync('nameEmpresa', String(empresa));
                 }
 
-                navigation.dispatch(
-                    CommonActions.reset({
-                        index: 0,
-                        routes: [{ name: 'dashboard' }],
-                    })
-                );
+                goToDashboard();
 
             } else {
                 Alert.alert("Error", data.message || "Credenciales incorrectas.");
@@ -268,28 +255,25 @@ export default function HomeScreen() {
     async function handleGoogleLogin() {
         setIsGoogleLoading(true);
         try {
-            let expoToken = null;
-            try {
-                const projectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
-                if (projectId) {
-                    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-                    expoToken = tokenData.data;
-                }
-            } catch (e) {
-                console.log("Error push token:", e);
+            if (!isGoogleSigninAvailable()) {
+                Alert.alert("No disponible", "Iniciar sesión con Google requiere un development build.");
+                return;
             }
 
-            await GoogleSignin.hasPlayServices();
+            let expoToken = null;
+            expoToken = await getPushToken();
+
+            await hasPlayServices();
 
             try {
-                await GoogleSignin.signOut();
+                await googleSignOut();
             } catch (e) {
                 console.log("Sin sesión previa de Google:", e);
             }
 
-            const userInfo = await GoogleSignin.signIn();
+            const userInfo = await googleSignIn();
 
-            if (userInfo.type === 'cancelled') {
+            if (!userInfo || userInfo.type === 'cancelled') {
                 console.log("Inicio de sesión con Google cancelado.");
                 return;
             }
@@ -329,12 +313,7 @@ export default function HomeScreen() {
                     if (empresa) await SecureStore.setItemAsync('nameEmpresa', String(empresa));
                 }
 
-                navigation.dispatch(
-                    CommonActions.reset({
-                        index: 0,
-                        routes: [{ name: 'dashboard' }],
-                    })
-                );
+                goToDashboard();
             } else {
                 Alert.alert("Error", data.message || "No se pudo iniciar sesión con Google.");
             }
@@ -362,15 +341,7 @@ export default function HomeScreen() {
         setIsAppleLoading(true);
         try {
             let expoToken = null;
-            try {
-                const projectId = process.env.EXPO_PUBLIC_EXPO_PROJECT_ID;
-                if (projectId) {
-                    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-                    expoToken = tokenData.data;
-                }
-            } catch (e) {
-                console.log("Error push token:", e);
-            }
+            expoToken = await getPushToken();
 
             const result = await appleSignIn();
 
@@ -420,12 +391,7 @@ export default function HomeScreen() {
                     if (empresa) await SecureStore.setItemAsync('nameEmpresa', String(empresa));
                 }
 
-                navigation.dispatch(
-                    CommonActions.reset({
-                        index: 0,
-                        routes: [{ name: 'dashboard' }],
-                    })
-                );
+                goToDashboard();
             } else {
                 Alert.alert("Error", data.message || "No se pudo iniciar sesión con Apple.");
             }

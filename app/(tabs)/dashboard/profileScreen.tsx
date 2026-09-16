@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { CommonActions } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { useFocusEffect, useNavigation } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import * as SecureStore from 'expo-secure-store';
 import { deleteUser } from 'firebase/auth';
 import { useCallback, useState } from "react";
@@ -21,6 +20,7 @@ import {
 } from "react-native";
 import { QrCodeSvg } from 'react-native-qr-svg';
 import { auth } from '../../../src/firebaseConfig';
+import { useAuthNavigation } from '../../../hooks/useAuthNavigation';
 
 // --- PALETA QRONNOS ---
 const COLORS = {
@@ -42,8 +42,7 @@ const FONTS = {
 };
 
 export default function ProfileScreen() {
-  const navigation = useNavigation();
-  const navigator: any = useNavigation();
+  const { goToLogin } = useAuthNavigation();
   const { width } = useWindowDimensions();
 
   const [nombreClienteState, setNameClienteState] = useState('');
@@ -183,12 +182,7 @@ export default function ProfileScreen() {
               await SecureStore.deleteItemAsync('nameCliente');
 
               Alert.alert("Cuenta eliminada", "Tu cuenta ha sido eliminada exitosamente.");
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [{ name: 'index' }],
-                })
-              );
+              goToLogin();
 
             } catch (error: any) {
               console.error("Error eliminando cuenta:", error);

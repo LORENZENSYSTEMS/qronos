@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { CommonActions } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { useNavigation, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, Linking, Modal, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CompanyMap from '../../../components/maps/CompanyMap';
+import { useAuthNavigation } from '../../../hooks/useAuthNavigation';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -70,7 +70,7 @@ const parseCoord = (value: any): number | null => {
 
 export default function GuestIndex() {
     const router = useRouter();
-    const navigation = useNavigation();
+    const { goToLogin } = useAuthNavigation();
     const safeAreaInsets = useSafeAreaInsets();
 
     const [lugares, setLugares] = useState<Lugar[]>([]);
@@ -234,14 +234,7 @@ export default function GuestIndex() {
             <View style={[styles.header, { paddingTop: safeAreaInsets.top + 10 }]}>
                 <View style={styles.headerTopRow}>
                     <TouchableOpacity
-                        onPress={() =>
-                            navigation.dispatch(
-                                CommonActions.reset({
-                                    index: 0,
-                                    routes: [{ name: 'index' }],
-                                })
-                            )
-                        }
+                        onPress={() => goToLogin()}
                         style={styles.backButton}
                     >
                         <Ionicons name="arrow-back" size={24} color={COLORS.text} />
