@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import MapView, { Callout, Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 
 export interface MapPlace {
   id: number;
@@ -27,68 +27,55 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Varios': '#4a8fe7'
 };
 
-function buildHtml(data: any[]): string {
-  const json = JSON.stringify(data).replace(/</g, '\\u003c');
+const DARK_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#090a0c' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8b9bb4' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#090a0c' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#232936' }, { weight: 1 }] },
+  { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#8b9bb4' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#0b0d10' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1a1f28' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#5b6b85' }] },
+  { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#181b21' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#232936' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#8b9bb4' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#20252f' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#9fb0c9' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1116' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#33415a' }] }
+];
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<style>
-  html, body, #map { height: 100%; margin: 0; padding: 0; background: #090a0c; }
-  .leaflet-container { background: #090a0c; font-family: -apple-system, Roboto, sans-serif; }
-  .leaflet-popup-content-wrapper { background: #181b21; color: #fff; border: 1px solid #232936; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
-  .leaflet-popup-tip { background: #181b21; border: 1px solid #232936; }
-  .leaflet-popup-content { margin: 12px 14px; }
-  .leaflet-control-attribution { background: rgba(9,10,12,0.8) !important; color: #8b9bb4 !important; font-size: 9px !important; }
-  .leaflet-control-attribution a { color: #01c38e !important; }
-  .pop-title { font-weight: 700; font-size: 13px; color: #fff; }
-  .pop-sub { font-size: 11px; color: #8b9bb4; margin-top: 2px; }
-</style>
-</head>
-<body>
-<div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-var DATA = ${json};
-var CATEGORY_COLORS = ${JSON.stringify(CATEGORY_COLORS)};
-function esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
-var map = L.map('map', { zoomControl: true }).setView([4.6, -74.1], 5);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 20
-}).addTo(map);
-var markers = [];
-DATA.forEach(function (p) {
-  var color = CATEGORY_COLORS[p.categoria] || '#01c38e';
-  var icon = L.divIcon({
-    className: '',
-    html: '<div style="width:26px;height:26px;border-radius:50%;background:' + color + ';border:3px solid #fff;box-shadow:0 0 8px rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;"><div style="width:8px;height:8px;border-radius:50%;background:#090a0c;"></div></div>',
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
-    popupAnchor: [0, -16]
-  });
-  var m = L.marker([p.lat, p.lng], { icon: icon }).addTo(map);
-  m.bindPopup('<div class="pop-title">' + esc(p.nombre) + '</div><div class="pop-sub">' + esc(p.categoria) + (p.ciudad ? ' &bull; ' + esc(p.ciudad) : '') + '</div>');
-  m.on('click', function () {
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ id: p.id }));
-    }
-  });
-  markers.push(m);
-});
-if (markers.length === 1) {
-  map.setView(markers[0].getLatLng(), 15);
-} else if (markers.length > 1) {
-  var group = L.featureGroup(markers);
-  map.fitBounds(group.getBounds().pad(0.2), { maxZoom: 15 });
+interface Place {
+  id: number;
+  nombre: string;
+  categoria: string;
+  ciudad: string;
+  lat: number;
+  lng: number;
 }
-</script>
-</body>
-</html>`;
+
+function buildRegion(places: Place[]) {
+  if (places.length === 0) {
+    return { latitude: 4.6, longitude: -74.1, latitudeDelta: 50, longitudeDelta: 50 };
+  }
+  const lats = places.map(p => p.lat);
+  const lngs = places.map(p => p.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const pad = Math.max((maxLat - minLat), (maxLng - minLng), 0.05) * 0.2;
+  const latDelta = Math.min(maxLat - minLat + pad * 2, 300);
+  const lngDelta = Math.min(maxLng - minLng + pad * 2, 300);
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: latDelta,
+    longitudeDelta: lngDelta
+  };
 }
 
 interface CompanyMapProps<T extends MapPlace> {
@@ -108,20 +95,16 @@ export default function CompanyMap<T extends MapPlace>({ lugares, height, onMark
         lat: l.lat,
         lng: l.lng
       }))
-      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+      .filter((p): p is Place => Number.isFinite(p.lat) && Number.isFinite(p.lng));
   }, [lugares]);
 
-  const html = useMemo(() => buildHtml(places), [places]);
+  const region = useMemo(() => buildRegion(places), [places]);
 
-  const handleMessage = (event: any) => {
-    try {
-      const parsed = JSON.parse(event.nativeEvent.data);
-      const lugar = lugares.find(l => l.id === parsed.id);
-      if (lugar && onMarkerPress) onMarkerPress(lugar);
-    } catch (e) {
-      console.error('CompanyMap message error:', e);
-    }
-  };
+  const placeById = useMemo(() => {
+    const map = new Map<number, T>();
+    lugares.forEach(l => map.set(l.id, l));
+    return map;
+  }, [lugares]);
 
   if (places.length === 0) {
     return (
@@ -134,22 +117,71 @@ export default function CompanyMap<T extends MapPlace>({ lugares, height, onMark
 
   return (
     <View style={height ? { height } : styles.flexFill}>
-      <WebView
-        originWhitelist={['*']}
-        source={{ html, baseUrl: 'https://unpkg.com/' }}
-        style={styles.webview}
-        javaScriptEnabled
-        domStorageEnabled
-        startInLoadingState
-        onMessage={handleMessage}
-      />
+      <MapView
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+        style={styles.map}
+        customMapStyle={DARK_MAP_STYLE}
+        region={region}
+      >
+        {places.map(p => {
+          const lugar = placeById.get(p.id);
+          const color = CATEGORY_COLORS[p.categoria] || COLORS.accent;
+          return (
+            <Marker
+              key={p.id}
+              coordinate={{ latitude: p.lat, longitude: p.lng }}
+              onPress={() => {
+                if (lugar && onMarkerPress) onMarkerPress(lugar);
+              }}
+            >
+              <View style={[styles.markerOuter, { backgroundColor: color }]}>
+                <View style={styles.markerInner} />
+              </View>
+              <Callout tooltip>
+                <View style={styles.callout}>
+                  <Text style={styles.calloutTitle}>{p.nombre}</Text>
+                  <Text style={styles.calloutSub}>
+                    {p.categoria}
+                    {p.ciudad ? ` • ${p.ciudad}` : ''}
+                  </Text>
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
+      </MapView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   flexFill: { flex: 1 },
-  webview: { flex: 1, backgroundColor: COLORS.background, borderRadius: 16 },
+  map: { flex: 1, backgroundColor: COLORS.background, borderRadius: 16 },
+  markerOuter: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 3,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4
+  },
+  markerInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.background },
+  callout: {
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12
+  },
+  calloutTitle: { fontWeight: '700', fontSize: 13, color: '#fff' },
+  calloutSub: { fontSize: 11, color: COLORS.textSec, marginTop: 2 },
   emptyContainer: {
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
