@@ -1,19 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -57,7 +57,7 @@ export default function CategoryManagerModal({ visible, onClose, jwt }: Props) {
 
   // Cargar categorías al abrir el modal
   useEffect(() => {
-    if (visible && jwt) {
+    if (visible) {
       fetchCategorias();
     }
   }, [visible, jwt]);
@@ -65,14 +65,19 @@ export default function CategoryManagerModal({ visible, onClose, jwt }: Props) {
   const fetchCategorias = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/categorias-productos`, {
-        headers: {
-          'Authorization': `Bearer ${jwt}`
-        }
-      });
+      const headers: Record<string, string> = {};
+      if (jwt) {
+        headers['Authorization'] = `Bearer ${jwt}`;
+      }
+
+      const response = await fetch(`${API_URL}/api/categorias-productos`, { headers });
+
       if (response.ok) {
         const data = await response.json();
-        setCategorias(data);
+        const lista = Array.isArray(data)
+          ? data
+          : (data.categorias || data.data || data.categories || []);
+        setCategorias(lista);
       }
     } catch (error) {
       console.error('Error al cargar categorías:', error);
@@ -210,28 +215,35 @@ export default function CategoryManagerModal({ visible, onClose, jwt }: Props) {
               ) : (
                 <FlatList
                   data={categorias}
-                  keyExtractor={(item) => item.categoria_prod_id.toString()}
+                  keyExtractor={(item, index) => (item?.categoria_prod_id ?? (item as any)?.id ?? index).toString()}
+                  style={{ flex: 1 }}
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{ paddingBottom: 20 }}
                   ListEmptyComponent={
                     <Text style={styles.emptyText}>No hay categorías creadas aún.</Text>
                   }
-                  renderItem={({ item }) => (
-                    <View style={styles.categoriaCard}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.catNombre}>{item.nombre}</Text>
-                        {item.descripcion ? (
-                          <Text style={styles.catDesc}>{item.descripcion}</Text>
-                        ) : null}
+                  renderItem={({ item }) => {
+                    const id = item.categoria_prod_id ?? (item as any).id;
+                    const nombreCat = item.nombre || (item as any).name || '';
+                    const descCat = item.descripcion || (item as any).description || '';
+
+                    return (
+                      <View style={styles.categoriaCard}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.catNombre}>{nombreCat}</Text>
+                          {descCat ? (
+                            <Text style={styles.catDesc}>{descCat}</Text>
+                          ) : null}
+                        </View>
+                        <TouchableOpacity 
+                          onPress={() => handleDelete(id, nombreCat)}
+                          style={styles.deleteBtn}
+                        >
+                          <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity 
-                        onPress={() => handleDelete(item.categoria_prod_id, item.nombre)}
-                        style={styles.deleteBtn}
-                      >
-                        <Ionicons name="trash-outline" size={20} color="#ff4444" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                    );
+                  }}
                 />
               )}
 

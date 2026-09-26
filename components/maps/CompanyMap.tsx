@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Callout, Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useMemo } from 'react';
+import { Image, Platform, StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 
 export interface MapPlace {
   id: number;
@@ -10,6 +10,7 @@ export interface MapPlace {
   pais?: string;
   lat?: number | null;
   lng?: number | null;
+  imagen?: string;
 }
 
 const COLORS = {
@@ -55,6 +56,7 @@ interface Place {
   ciudad: string;
   lat: number;
   lng: number;
+  imagen?: string;
 }
 
 function buildRegion(places: Place[]) {
@@ -85,17 +87,20 @@ interface CompanyMapProps<T extends MapPlace> {
 }
 
 export default function CompanyMap<T extends MapPlace>({ lugares, height, onMarkerPress }: CompanyMapProps<T>) {
-  const places = useMemo(() => {
+  const places = useMemo<Place[]>(() => {
     return lugares
+      .filter((l): l is T & { lat: number; lng: number } => 
+        typeof l.lat === 'number' && typeof l.lng === 'number' && Number.isFinite(l.lat) && Number.isFinite(l.lng)
+      )
       .map(l => ({
         id: l.id,
         nombre: l.titulo ?? '',
         categoria: l.categoria ?? 'Varios',
         ciudad: l.ciudad ?? '',
         lat: l.lat,
-        lng: l.lng
-      }))
-      .filter((p): p is Place => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+        lng: l.lng,
+        ...(l.imagen ? { imagen: l.imagen } : {})
+      }));
   }, [lugares]);
 
   const region = useMemo(() => buildRegion(places), [places]);
@@ -134,18 +139,17 @@ export default function CompanyMap<T extends MapPlace>({ lugares, height, onMark
                 if (lugar && onMarkerPress) onMarkerPress(lugar);
               }}
             >
-              <View style={[styles.markerOuter, { backgroundColor: color }]}>
-                <View style={styles.markerInner} />
+              <View style={[styles.markerAvatarContainer, { borderColor: color }]}>
+                {p.imagen ? (
+                  <Image 
+                    source={{ uri: p.imagen }} 
+                    style={styles.markerAvatarImage} 
+                    resizeMode="cover" 
+                  />
+                ) : (
+                  <View style={[styles.markerAvatarFallback, { backgroundColor: color }]} />
+                )}
               </View>
-              <Callout tooltip>
-                <View style={styles.callout}>
-                  <Text style={styles.calloutTitle}>{p.nombre}</Text>
-                  <Text style={styles.calloutSub}>
-                    {p.categoria}
-                    {p.ciudad ? ` • ${p.ciudad}` : ''}
-                  </Text>
-                </View>
-              </Callout>
             </Marker>
           );
         })}
@@ -157,31 +161,29 @@ export default function CompanyMap<T extends MapPlace>({ lugares, height, onMark
 const styles = StyleSheet.create({
   flexFill: { flex: 1 },
   map: { flex: 1, backgroundColor: COLORS.background, borderRadius: 16 },
-  markerOuter: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 3,
-    borderColor: '#fff',
+  markerAvatarContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.6,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
     elevation: 4
   },
-  markerInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.background },
-  callout: {
-    backgroundColor: COLORS.cardBg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12
+  markerAvatarImage: {
+    width: '100%',
+    height: '100%',
   },
-  calloutTitle: { fontWeight: '700', fontSize: 13, color: '#fff' },
-  calloutSub: { fontSize: 11, color: COLORS.textSec, marginTop: 2 },
+  markerAvatarFallback: {
+    width: '100%',
+    height: '100%',
+  },
   emptyContainer: {
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
